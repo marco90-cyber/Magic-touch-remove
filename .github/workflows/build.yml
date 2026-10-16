@@ -1,0 +1,54 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  model:
+    # Pubblica una sola volta il modello LaMa come asset di backup (l'app lo scarica al primo avvio)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish model release if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view model-v1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "model release already exists"; exit 0
+          fi
+          curl -L --fail --retry 3 -o lama_fp32.onnx \
+            https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx
+          gh release create model-v1 lama_fp32.onnx --repo "$GITHUB_REPOSITORY" \
+            --latest=false --title "LaMa ONNX model" \
+            --notes "LaMa (big-lama, Apache-2.0) esportato in ONNX da Carve/LaMa-ONNX. Scaricato dall'app al primo avvio."
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+      - name: Build release APK
+        run: gradle :app:assembleRelease -Pvc=${{ github.run_number }} --no-daemon --stacktrace
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk MagicTouchRemove-v1.${{ github.run_number }}.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MagicTouchRemove-apk
+          path: MagicTouchRemove-v1.${{ github.run_number }}.apk
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v1.${{ github.run_number }}" "MagicTouchRemove-v1.${{ github.run_number }}.apk" \
+            --target "${{ github.sha }}" --title "Magic Touch Remove v1.${{ github.run_number }}" \
+            --notes "Build automatica del commit ${{ github.sha }}"
