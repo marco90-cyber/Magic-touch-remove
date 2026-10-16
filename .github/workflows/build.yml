@@ -47,6 +47,17 @@ jobs:
             --latest=false --title "MobileSAM ONNX" \
             --notes "MobileSAM (MIT) in formato ONNX da Acly/MobileSAM. Scaricato dall'app per la selezione automatica degli oggetti."
 
+      - name: Upload MobileSAM multi-mask decoder if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view sam-v1 --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name' | grep -q sam_mask_decoder_multi.onnx; then
+            echo "multi decoder already uploaded"; exit 0
+          fi
+          curl -L --fail --retry 3 -o sam_mask_decoder_multi.onnx \
+            https://huggingface.co/Acly/MobileSAM/resolve/main/sam_mask_decoder_multi.onnx
+          gh release upload sam-v1 sam_mask_decoder_multi.onnx --repo "$GITHUB_REPOSITORY"
+
   build:
     if: ${{ !inputs.only_models }}
     runs-on: ubuntu-latest
