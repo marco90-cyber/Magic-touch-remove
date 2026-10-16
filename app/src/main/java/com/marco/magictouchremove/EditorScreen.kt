@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -268,6 +269,7 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
         // ---- pannello impostazioni ----
         if (showSettings) {
             Column(Modifier.fillMaxWidth().background(Panel).padding(horizontal = 16.dp, vertical = 8.dp)) {
+                BrushPreview(vm.brushDp, vm.hardness, vm.maskOpacity)
                 SettingSlider("Dimensione", vm.brushDp, 8f..120f) { vm.brushDp = it }
                 SettingSlider("Durezza", vm.hardness, 0f..1f) { vm.hardness = it }
                 SettingSlider("Opacità", vm.maskOpacity, 0.2f..1f) { vm.maskOpacity = it; vm.touch() }
@@ -307,5 +309,43 @@ private fun ToolButton(icon: ImageVector, label: String, selected: Boolean, onCl
     ) {
         Icon(icon, label, tint = tint, modifier = Modifier.size(24.dp))
         Text(label, color = tint, fontSize = 11.sp)
+    }
+}
+
+/** Anteprima del pennello: tratto d'esempio con dimensione, durezza e opacità correnti. */
+@Composable
+private fun BrushPreview(sizeDp: Float, hardness: Float, opacity: Float) {
+    val density = LocalDensity.current.density
+    val paint = remember {
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+    }
+    val path = remember { android.graphics.Path() }
+    Box(
+        Modifier.fillMaxWidth().height(110.dp).padding(bottom = 6.dp)
+            .clip(RoundedCornerShape(12.dp)).background(Color(0xFF2B3330))
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val r = sizeDp * density / 2f
+            paint.strokeWidth = r * 2f
+            paint.color = android.graphics.Color.argb((opacity * 255).toInt(), 46, 230, 166)
+            paint.maskFilter = if (hardness < 0.97f)
+                android.graphics.BlurMaskFilter(r * (1f - hardness) * 0.7f + 0.5f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+            else null
+            val w = size.width
+            val h = size.height
+            path.reset()
+            path.moveTo(w * 0.2f, h * 0.55f)
+            path.cubicTo(w * 0.4f, h * 0.15f, w * 0.6f, h * 0.95f, w * 0.8f, h * 0.45f)
+            drawIntoCanvas { c ->
+                c.nativeCanvas.save()
+                c.nativeCanvas.clipRect(0f, 0f, w, h)
+                c.nativeCanvas.drawPath(path, paint)
+                c.nativeCanvas.restore()
+            }
+        }
     }
 }
