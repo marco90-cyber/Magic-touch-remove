@@ -69,21 +69,21 @@ fun HomeScreen(model: ModelState, onDownload: () -> Unit, onPick: () -> Unit) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 when (model) {
                     is ModelState.Ready -> {
-                        Text("Modello IA pronto", color = Mint, fontWeight = FontWeight.SemiBold)
-                        Text("LaMa funziona offline sul tuo telefono.", color = Color(0xFF8A9792), fontSize = 13.sp)
+                        Text("Modelli IA pronti", color = Mint, fontWeight = FontWeight.SemiBold)
+                        Text("Rimozione (LaMa) e selezione automatica (MobileSAM) funzionano offline.", color = Color(0xFF8A9792), fontSize = 13.sp)
                     }
                     is ModelState.Downloading -> {
-                        Text("Download modello IA… ${(model.progress * 100).toInt()}%", color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text("Download modelli IA… ${(model.progress * 100).toInt()}%", color = Color.White, fontWeight = FontWeight.SemiBold)
                         LinearProgressIndicator(progress = { model.progress }, color = Mint, modifier = Modifier.fillMaxWidth())
                     }
                     is ModelState.Missing, is ModelState.Error -> {
-                        Text("Serve il modello IA (circa 200 MB)", color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text("Servono i modelli IA (fino a 250 MB)", color = Color.White, fontWeight = FontWeight.SemiBold)
                         Text(
                             "Si scarica una sola volta, poi funziona offline. Consigliato il Wi-Fi.",
                             color = Color(0xFF8A9792), fontSize = 13.sp, textAlign = TextAlign.Start
                         )
                         if (model is ModelState.Error) Text("Errore: ${model.message}", color = Color(0xFFFF8A80), fontSize = 12.sp)
-                        Button(onClick = onDownload, modifier = Modifier.fillMaxWidth()) { Text("Scarica modello") }
+                        Button(onClick = onDownload, modifier = Modifier.fillMaxWidth()) { Text("Scarica modelli") }
                     }
                 }
             }

@@ -9,6 +9,8 @@ import android.graphics.Canvas
 import android.graphics.ImageDecoder
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PointF
+import android.graphics.RectF
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.Shader
@@ -29,7 +31,7 @@ import java.io.File
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-enum class Tool { BRUSH, LASSO, ERASER, RESTORE }
+enum class Tool { SELECT, BRUSH, LASSO, ERASER, RESTORE }
 
 /** Stato immutabile (copy-on-write) usato per undo/redo. */
 class Snapshot(val image: Bitmap, val mask: Bitmap, val hasMask: Boolean)
@@ -49,6 +51,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     var auto by mutableStateOf(false)
     var hasMask by mutableStateOf(false); private set
     var busy by mutableStateOf(false); private set
+    var busyText by mutableStateOf(""); private set
     var strokeActive by mutableStateOf(false); private set
     var canUndo by mutableStateOf(false); private set
     var canRedo by mutableStateOf(false); private set
@@ -194,6 +197,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             Tool.LASSO -> {
                 lasso.reset(); lasso.moveTo(x, y); lassoPoints = 1
             }
+            Tool.SELECT -> {}
         }
         version++
     }
@@ -252,6 +256,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         busy = true
+        busyText = "Rimozione in corso…"
         viewModelScope.launch {
             val res = withContext(Dispatchers.Default) {
                 runCatching { Inpainter.get(ctx).inpaint(img, mk, expand.roundToInt()) }
@@ -268,6 +273,64 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }.onFailure { message = "Errore IA: ${it.message ?: it.javaClass.simpleName}" }
             busy = false
+            if (tool == Tool.SELECT && image != null) prepareSegmenter(quiet = true)
+        }
+    }
+
+    // ---- selezione automatica (MobileSAM) ----
+    /** Analizza in anticipo la foto corrente, così il tocco successivo è istantaneo. */
+    fun prepareSegmenter(quiet: Boolean = false) {
+        val img = image ?: return
+        if (busy) return
+        val ctx = getApplication<Application>()
+        if (!ModelManager.isSamReady(ctx)) {
+            if (!quiet) message = "Il modello di selezione non è ancora scaricato"
+            return
+        }
+        busy = true
+        busyText = "Analisi dell'immagine…"
+        viewModelScope.launch {
+            val r = withContext(Dispatchers.Default) { runCatching { Segmenter.get(ctx).ensureEncoded(img) } }
+            busy = false
+            r.onFailure { message = "Errore selezione: ${it.message ?: it.javaClass.simpleName}" }
+        }
+    }
+
+    /** Seleziona l'oggetto sotto un tocco ([point]) o dentro un riquadro ([box]); coordinate in pixel immagine. */
+    fun selectObject(point: PointF?, box: RectF?) {
+        val img = image ?: return
+        val mk = mask ?: return
+        if (busy) return
+        val ctx = getApplication<Application>()
+        if (!ModelManager.isSamReady(ctx)) {
+            message = "Il modello di selezione non è ancora scaricato"
+            return
+        }
+        if (point != null && (point.x < 0 || point.y < 0 || point.x >= img.width || point.y >= img.height)) return
+        busy = true
+        busyText = "Selezione oggetto…"
+        viewModelScope.launch {
+            val res = withContext(Dispatchers.Default) {
+                runCatching {
+                    val sel = Segmenter.get(ctx).select(img, point, box) ?: return@runCatching null
+                    val px = IntArray(img.width * img.height) { if (sel[it]) 0xFF000000.toInt() else 0 }
+                    Bitmap.createBitmap(px, img.width, img.height, Bitmap.Config.ARGB_8888)
+                }
+            }
+            busy = false
+            res.onSuccess { sel ->
+                if (sel == null) {
+                    message = "Nessun oggetto trovato qui"
+                } else if (image === img) {
+                    pushUndo()
+                    val copy = mk.copy(Bitmap.Config.ALPHA_8, true)
+                    Canvas(copy).drawBitmap(sel, 0f, 0f, null)
+                    mask = copy
+                    hasMask = true
+                    version++
+                    if (auto) runInpaint()
+                }
+            }.onFailure { message = "Errore selezione: ${it.message ?: it.javaClass.simpleName}" }
         }
     }
 

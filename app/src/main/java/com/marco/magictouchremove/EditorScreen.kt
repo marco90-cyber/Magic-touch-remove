@@ -63,7 +63,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import android.content.Intent
 import android.graphics.Paint
+import kotlin.math.max
 import kotlin.math.min
+import android.graphics.PointF
+import android.graphics.RectF
+import androidx.compose.material.icons.filled.TouchApp
 
 @Composable
 fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
@@ -77,6 +81,8 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
     var cursor by remember { mutableStateOf<Offset?>(null) }
     var showSettings by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
+    var selStart by remember { mutableStateOf<Offset?>(null) }
+    var selEnd by remember { mutableStateOf<Offset?>(null) }
 
     // adatta l'immagine allo schermo a ogni nuova foto / cambio dimensioni
     LaunchedEffect(vm.loadId, viewSize) {
@@ -134,8 +140,11 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
                         val down = awaitFirstDown()
                         var multi = false
                         var drawing = false
+                        var selecting = false
                         val toImg = { p: Offset -> Offset((p.x - offset.x) / scale, (p.y - offset.y) / scale) }
-                        if (!vm.busy && vm.image != null) {
+                        if (!vm.busy && vm.image != null && vm.tool == Tool.SELECT) {
+                            selecting = true; selStart = down.position; selEnd = down.position
+                        } else if (!vm.busy && vm.image != null) {
                             val radius = vm.brushDp * density / scale / 2f
                             val p = toImg(down.position)
                             cursor = down.position
@@ -149,6 +158,7 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
                                 if (!multi) {
                                     multi = true
                                     if (drawing) { vm.cancelStroke(); drawing = false; cursor = null }
+                                    if (selecting) { selecting = false; selStart = null; selEnd = null }
                                 }
                                 val z = event.calculateZoom()
                                 val pan = event.calculatePan()
@@ -158,6 +168,10 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
                                 offset = Offset(c.x + (offset.x - c.x) * f + pan.x, c.y + (offset.y - c.y) * f + pan.y)
                                 scale = ns
                                 event.changes.forEach { it.consume() }
+                            } else if (selecting && pressed == 1) {
+                                val ch = event.changes.first { it.pressed }
+                                selEnd = ch.position
+                                ch.consume()
                             } else if (drawing && pressed == 1) {
                                 val ch = event.changes.first { it.pressed }
                                 val p = toImg(ch.position)
@@ -167,6 +181,20 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
                             }
                         } while (event.changes.any { it.pressed })
                         if (drawing) vm.endStroke()
+                        if (selecting) {
+                            val a = selStart
+                            val b = selEnd
+                            selStart = null; selEnd = null
+                            if (a != null && b != null) {
+                                val pa = toImg(a)
+                                val pb = toImg(b)
+                                if ((b - a).getDistance() < 14f * density) {
+                                    vm.selectObject(PointF(pa.x, pa.y), null)
+                                } else {
+                                    vm.selectObject(null, RectF(min(pa.x, pb.x), min(pa.y, pb.y), max(pa.x, pb.x), max(pa.y, pb.y)))
+                                }
+                            }
+                        }
                         cursor = null
                     }
                 }
@@ -190,6 +218,12 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
                         nc.drawPath(vm.lasso, lassoPaint)
                     }
                     nc.restore()
+
+                    val sa = selStart
+                    val sb = selEnd
+                    if (sa != null && sb != null && vm.tool == Tool.SELECT) {
+                        nc.drawRect(min(sa.x, sb.x), min(sa.y, sb.y), max(sa.x, sb.x), max(sa.y, sb.y), boxPaint)
+                    }
 
                     val cur = cursor
                     if (cur != null && vm.strokeActive) {
@@ -238,6 +272,14 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
                     .padding(horizontal = 14.dp, vertical = 8.dp)
             ) { Text("AUTO", color = if (vm.auto) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
 
+            if (vm.tool == Tool.SELECT && !vm.hasMask && !vm.busy && vm.image != null) {
+                Box(
+                    Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
+                        .clip(RoundedCornerShape(50)).background(Color(0x99000000))
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) { Text("Tocca un oggetto o trascina un riquadro", color = Color.White, fontSize = 13.sp) }
+            }
+
             // tasto prima/dopo: tieni premuto per vedere la foto originale
             if (vm.image !== vm.original && !vm.busy) {
                 Box(
@@ -260,7 +302,7 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
                 Box(Modifier.fillMaxSize().background(Color(0x88000000)), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator(color = Mint)
-                        Text("Rimozione in corso…", color = Color.White, modifier = Modifier.padding(top = 12.dp))
+                        Text(vm.busyText, color = Color.White, modifier = Modifier.padding(top = 12.dp))
                     }
                 }
             }
@@ -279,6 +321,7 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
 
         // ---- barra strumenti ----
         Row(Modifier.fillMaxWidth().background(Ink).padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceAround) {
+            ToolButton(Icons.Filled.TouchApp, "Selezione", vm.tool == Tool.SELECT && !showSettings) { vm.tool = Tool.SELECT; showSettings = false; vm.prepareSegmenter() }
             ToolButton(Icons.Filled.Brush, "Pennello", vm.tool == Tool.BRUSH && !showSettings) { vm.tool = Tool.BRUSH; showSettings = false }
             ToolButton(Icons.Filled.Gesture, "Lasso", vm.tool == Tool.LASSO && !showSettings) { vm.tool = Tool.LASSO; showSettings = false }
             ToolButton(Icons.Filled.Backspace, "Gomma", vm.tool == Tool.ERASER && !showSettings) { vm.tool = Tool.ERASER; showSettings = false }
@@ -304,7 +347,7 @@ private fun SettingSlider(label: String, value: Float, range: ClosedFloatingPoin
 private fun ToolButton(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
     val tint = if (selected) Mint else Color(0xFF9AA5A1)
     Column(
-        Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
+        Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 6.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(icon, label, tint = tint, modifier = Modifier.size(24.dp))

@@ -18,49 +18,80 @@ sealed interface ModelState {
     data class Error(val message: String) : ModelState
 }
 
-/** Scarica e conserva il modello LaMa (ONNX, ~200 MB) nella memoria interna dell'app. */
-object ModelManager {
-    private const val MIN_SIZE = 150_000_000L
-    private const val FALLBACK_SIZE = 208_000_000L
-    private val URLS = listOf(
-        "https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx",
-        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/model-v1/lama_fp32.onnx"
-    )
+/** Un modello ONNX da scaricare: nome file, dimensione attesa e indirizzi (il primo che risponde). */
+private class ModelFile(val name: String, val expected: Long, val minSize: Long, val urls: List<String>)
 
+private const val REPO = "https://github.com/marco90-cyber/Magic-touch-remove/releases/download"
+
+private val LAMA = ModelFile(
+    "lama_fp32.onnx", 208_044_816L, 150_000_000L,
+    listOf("https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx", "$REPO/model-v1/lama_fp32.onnx")
+)
+private val SAM_ENCODER = ModelFile(
+    "mobile_sam_image_encoder.onnx", 28_157_093L, 25_000_000L,
+    listOf("https://huggingface.co/Acly/MobileSAM/resolve/main/mobile_sam_image_encoder.onnx", "$REPO/sam-v1/mobile_sam_image_encoder.onnx")
+)
+private val SAM_DECODER = ModelFile(
+    "sam_mask_decoder_multi.onnx", 16_496_559L, 14_000_000L,
+    listOf("https://huggingface.co/Acly/MobileSAM/resolve/main/sam_mask_decoder_multi.onnx", "$REPO/sam-v1/sam_mask_decoder_multi.onnx")
+)
+private val ALL = listOf(LAMA, SAM_ENCODER, SAM_DECODER)
+
+/**
+ * Scarica e conserva nella memoria interna i modelli IA:
+ * LaMa (rimozione oggetti, ~208 MB) e MobileSAM (selezione automatica, ~45 MB).
+ */
+object ModelManager {
     private val _state = MutableStateFlow<ModelState>(ModelState.Missing)
     val state: StateFlow<ModelState> = _state
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    fun file(ctx: Context) = File(ctx.filesDir, "models/lama_fp32.onnx")
-    fun isReady(ctx: Context) = file(ctx).let { it.exists() && it.length() > MIN_SIZE }
+    private fun fileOf(ctx: Context, m: ModelFile) = File(ctx.filesDir, "models/${m.name}")
+    private fun has(ctx: Context, m: ModelFile) = fileOf(ctx, m).let { it.exists() && it.length() > m.minSize }
+
+    fun file(ctx: Context) = fileOf(ctx, LAMA)
+    fun samEncoder(ctx: Context) = fileOf(ctx, SAM_ENCODER)
+    fun samDecoder(ctx: Context) = fileOf(ctx, SAM_DECODER)
+
+    fun isReady(ctx: Context) = has(ctx, LAMA)
+    fun isSamReady(ctx: Context) = has(ctx, SAM_ENCODER) && has(ctx, SAM_DECODER)
+    private fun allReady(ctx: Context) = ALL.all { has(ctx, it) }
 
     fun init(ctx: Context) {
         if (_state.value is ModelState.Downloading) return
-        _state.value = if (isReady(ctx)) ModelState.Ready else ModelState.Missing
+        _state.value = if (allReady(ctx)) ModelState.Ready else ModelState.Missing
     }
 
+    /** Scarica solo i modelli che mancano. */
     fun download(ctx: Context) {
-        if (_state.value is ModelState.Downloading || isReady(ctx)) return
+        if (_state.value is ModelState.Downloading || allReady(ctx)) return
         val app = ctx.applicationContext
+        val missing = ALL.filter { !has(app, it) }
+        val total = missing.sumOf { it.expected }
         _state.value = ModelState.Downloading(0f)
         scope.launch {
-            var lastError = "download non riuscito"
-            for (url in URLS) {
-                try {
-                    fetch(app, url)
-                    _state.value = ModelState.Ready
-                    return@launch
-                } catch (e: Exception) {
-                    lastError = e.message ?: e.javaClass.simpleName
-                    _state.value = ModelState.Downloading(0f)
+            var doneBefore = 0L
+            for (m in missing) {
+                var ok = false
+                var lastError = "download non riuscito"
+                for (url in m.urls) {
+                    try {
+                        fetch(app, m, url) { done -> _state.value = ModelState.Downloading(((doneBefore + done).toFloat() / total).coerceIn(0f, 0.99f)) }
+                        ok = true
+                        break
+                    } catch (e: Exception) {
+                        lastError = "${m.name}: ${e.message ?: e.javaClass.simpleName}"
+                    }
                 }
+                if (!ok) { _state.value = ModelState.Error(lastError); return@launch }
+                doneBefore += m.expected
             }
-            _state.value = ModelState.Error(lastError)
+            _state.value = ModelState.Ready
         }
     }
 
-    private fun fetch(ctx: Context, url: String) {
-        val target = file(ctx)
+    private fun fetch(ctx: Context, m: ModelFile, url: String, onProgress: (Long) -> Unit) {
+        val target = fileOf(ctx, m)
         target.parentFile?.mkdirs()
         val part = File(target.path + ".part")
         val conn = URL(url).openConnection() as HttpURLConnection
@@ -70,9 +101,8 @@ object ModelManager {
         conn.setRequestProperty("User-Agent", "MagicTouchRemove/1.0")
         try {
             if (conn.responseCode !in 200..299) error("HTTP ${conn.responseCode}")
-            val total = conn.contentLengthLong.takeIf { it > 0 } ?: FALLBACK_SIZE
             var done = 0L
-            var lastPct = -1
+            var lastReport = 0L
             conn.inputStream.use { input ->
                 part.outputStream().use { out ->
                     val buf = ByteArray(256 * 1024)
@@ -81,15 +111,11 @@ object ModelManager {
                         if (n < 0) break
                         out.write(buf, 0, n)
                         done += n
-                        val pct = (done * 100 / total).toInt().coerceIn(0, 99)
-                        if (pct != lastPct) {
-                            lastPct = pct
-                            _state.value = ModelState.Downloading(pct / 100f)
-                        }
+                        if (done - lastReport > 512 * 1024) { lastReport = done; onProgress(done) }
                     }
                 }
             }
-            if (part.length() < MIN_SIZE) error("file incompleto")
+            if (part.length() < m.minSize) error("file incompleto")
             target.delete()
             if (!part.renameTo(target)) error("impossibile salvare il modello")
         } finally {
