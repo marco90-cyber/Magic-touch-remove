@@ -79,7 +79,14 @@ fun HomeScreen(model: ModelState, onDownload: () -> Unit, onPick: () -> Unit) {
                     is ModelState.Missing, is ModelState.Error -> {
                         Text("Servono i modelli IA (fino a 250 MB)", color = Color.White, fontWeight = FontWeight.SemiBold)
                         Text(
-                            "Si scarica una sola volta, poi funziona offline. Consigliato il Wi-Fi.",
+                            "Perché? L'intelligenza artificiale che cancella e seleziona gli oggetti è un file molto grande " +
+                                "(LaMa ~208 MB per la rimozione, MobileSAM ~45 MB per la selezione). Se fosse dentro l'app, " +
+                                "l'installazione sarebbe enorme e ogni aggiornamento lo scaricherebbe di nuovo.",
+                            color = Color(0xFF8A9792), fontSize = 13.sp, textAlign = TextAlign.Start
+                        )
+                        Text(
+                            "Lo scarichi una sola volta e resta sul telefono: poi tutto funziona offline e le tue foto " +
+                            "non vengono mai inviate a nessun server. Consigliato il Wi-Fi.",
                             color = Color(0xFF8A9792), fontSize = 13.sp, textAlign = TextAlign.Start
                         )
                         if (model is ModelState.Error) Text("Errore: ${model.message}", color = Color(0xFFFF8A80), fontSize = 12.sp)

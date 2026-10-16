@@ -37,7 +37,6 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(AColor.TRANSPARENT)
         )
         ModelManager.init(applicationContext)
-        ModelManager.download(applicationContext)   // scarica i modelli mancanti all'apertura
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(primary = Mint, background = Ink, surface = Panel)) {
                 App()
