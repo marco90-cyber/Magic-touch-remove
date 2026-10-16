@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      only_models:
+        description: "Solo pubblicazione modelli (niente build APK)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -26,7 +31,24 @@ jobs:
             --latest=false --title "LaMa ONNX model" \
             --notes "LaMa (big-lama, Apache-2.0) esportato in ONNX da Carve/LaMa-ONNX. Scaricato dall'app al primo avvio."
 
+      - name: Publish MobileSAM release if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view sam-v1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "sam release already exists"; exit 0
+          fi
+          mkdir sam
+          curl -L --fail --retry 3 -o sam/mobile_sam_image_encoder.onnx \
+            https://huggingface.co/Acly/MobileSAM/resolve/main/mobile_sam_image_encoder.onnx
+          curl -L --fail --retry 3 -o sam/sam_mask_decoder_single.onnx \
+            https://huggingface.co/Acly/MobileSAM/resolve/main/sam_mask_decoder_single.onnx
+          gh release create sam-v1 sam/*.onnx --repo "$GITHUB_REPOSITORY" \
+            --latest=false --title "MobileSAM ONNX" \
+            --notes "MobileSAM (MIT) in formato ONNX da Acly/MobileSAM. Scaricato dall'app per la selezione automatica degli oggetti."
+
   build:
+    if: ${{ !inputs.only_models }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
