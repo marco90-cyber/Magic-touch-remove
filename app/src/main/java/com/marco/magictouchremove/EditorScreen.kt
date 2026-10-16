@@ -8,6 +8,8 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material.icons.filled.Compare
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -128,7 +130,7 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
                 .onSizeChanged { viewSize = it }
                 .pointerInput(Unit) {
                     awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val down = awaitFirstDown()
                         var multi = false
                         var drawing = false
                         val toImg = { p: Offset -> Offset((p.x - offset.x) / scale, (p.y - offset.y) / scale) }
@@ -170,8 +172,10 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
         ) {
             Canvas(Modifier.fillMaxSize()) {
                 @Suppress("UNUSED_VARIABLE") val v = vm.version
-                val im = vm.image ?: return@Canvas
-                val mk = vm.mask
+                val cur0 = vm.image ?: return@Canvas
+                val cmp = vm.comparing
+                val im = if (cmp) (vm.original ?: cur0) else cur0
+                val mk = if (cmp) null else vm.mask
                 maskPaint.color = android.graphics.Color.argb((vm.maskOpacity * 255).toInt(), 46, 230, 166)
                 drawIntoCanvas { c ->
                     val nc = c.nativeCanvas
@@ -232,6 +236,24 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
                     .clickable { vm.auto = !vm.auto }
                     .padding(horizontal = 14.dp, vertical = 8.dp)
             ) { Text("AUTO", color = if (vm.auto) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+
+            // tasto prima/dopo: tieni premuto per vedere la foto originale
+            if (vm.image !== vm.original && !vm.busy) {
+                Box(
+                    Modifier.align(Alignment.TopEnd).padding(8.dp).size(44.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(if (vm.comparing) Mint else Color(0x66000000))
+                        .pointerInput(Unit) {
+                            detectTapGestures(onPress = {
+                                vm.comparing = true
+                                try { tryAwaitRelease() } finally { vm.comparing = false }
+                            })
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.Compare, "Prima/Dopo", tint = if (vm.comparing) Color.Black else Color.White)
+                }
+            }
 
             if (vm.busy) {
                 Box(Modifier.fillMaxSize().background(Color(0x88000000)), contentAlignment = Alignment.Center) {

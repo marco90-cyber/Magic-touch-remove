@@ -53,6 +53,8 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     var canUndo by mutableStateOf(false); private set
     var canRedo by mutableStateOf(false); private set
     var message by mutableStateOf<String?>(null)
+    var comparing by mutableStateOf(false)
+    val original: Bitmap? get() = source
 
     val lasso = Path()
 
