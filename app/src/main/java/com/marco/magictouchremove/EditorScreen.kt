@@ -10,6 +10,20 @@ import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material.icons.filled.Compare
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,6 +83,7 @@ import android.graphics.PointF
 import android.graphics.RectF
 import androidx.compose.material.icons.filled.TouchApp
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
     val ctx = LocalContext.current
@@ -102,34 +117,32 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
 
     Column(Modifier.fillMaxSize().background(Color.Black)) {
         // ---- barra in alto ----
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Indietro", tint = Color.White) }
-            Box(Modifier.weight(1f))
-            IconButton(onClick = { vm.undo() }, enabled = vm.canUndo && !vm.busy) {
-                Icon(Icons.AutoMirrored.Filled.Undo, "Annulla", tint = if (vm.canUndo) Color.White else Color(0xFF555555))
-            }
-            IconButton(onClick = { vm.redo() }, enabled = vm.canRedo && !vm.busy) {
-                Icon(Icons.AutoMirrored.Filled.Redo, "Ripeti", tint = if (vm.canRedo) Color.White else Color(0xFF555555))
-            }
-            Box(Modifier.weight(1f))
-            Box {
-                IconButton(onClick = { showMenu = true }) { Icon(Icons.Filled.IosShare, "Esporta", tint = Color.White) }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(text = { Text("Salva in galleria") }, onClick = { showMenu = false; vm.saveToGallery() })
-                    DropdownMenuItem(text = { Text("Condividi") }, onClick = {
-                        showMenu = false
-                        vm.share { uri ->
-                            val i = Intent(Intent.ACTION_SEND).apply {
-                                type = "image/jpeg"
-                                putExtra(Intent.EXTRA_STREAM, uri)
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        TopAppBar(
+            title = {},
+            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Indietro") } },
+            actions = {
+                IconButton(onClick = { vm.undo() }, enabled = vm.canUndo && !vm.busy) { Icon(Icons.AutoMirrored.Filled.Undo, "Annulla") }
+                IconButton(onClick = { vm.redo() }, enabled = vm.canRedo && !vm.busy) { Icon(Icons.AutoMirrored.Filled.Redo, "Ripeti") }
+                Box {
+                    IconButton(onClick = { showMenu = true }) { Icon(Icons.Filled.IosShare, "Esporta") }
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        DropdownMenuItem(text = { Text("Salva in galleria") }, leadingIcon = { Icon(Icons.Filled.Save, null) }, onClick = { showMenu = false; vm.saveToGallery() })
+                        DropdownMenuItem(text = { Text("Condividi") }, leadingIcon = { Icon(Icons.Filled.IosShare, null) }, onClick = {
+                            showMenu = false
+                            vm.share { uri ->
+                                val i = Intent(Intent.ACTION_SEND).apply {
+                                    type = "image/jpeg"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                ctx.startActivity(Intent.createChooser(i, "Condividi"))
                             }
-                            ctx.startActivity(Intent.createChooser(i, "Condividi"))
-                        }
-                    })
+                        })
+                    }
                 }
-            }
-        }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black, navigationIconContentColor = Color.White, actionIconContentColor = Color.White)
+        )
 
         // ---- area immagine ----
         Box(
@@ -257,27 +270,25 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
 
             // pulsante "Cancella AI" e interruttore AUTO
             if (vm.hasMask && !vm.busy && !vm.strokeActive) {
-                Box(
-                    Modifier.align(Alignment.BottomStart).padding(12.dp)
-                        .clip(RoundedCornerShape(50)).background(Mint)
-                        .clickable { vm.runInpaint() }
-                        .padding(horizontal = 18.dp, vertical = 10.dp)
-                ) { Text("Cancella AI", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 15.sp) }
+                ExtendedFloatingActionButton(
+                    onClick = { vm.runInpaint() },
+                    icon = { Icon(Icons.Filled.AutoFixHigh, null) },
+                    text = { Text("Cancella AI") },
+                    modifier = Modifier.align(Alignment.BottomStart).padding(12.dp)
+                )
             }
-            Box(
-                Modifier.align(Alignment.BottomEnd).padding(12.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(if (vm.auto) Mint else Color(0x66000000))
-                    .clickable { vm.auto = !vm.auto }
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
-            ) { Text("AUTO", color = if (vm.auto) Color.Black else Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+            FilterChip(
+                selected = vm.auto, onClick = { vm.auto = !vm.auto },
+                label = { Text("AUTO") },
+                leadingIcon = if (vm.auto) ({ Icon(Icons.Filled.Check, null, modifier = Modifier.size(18.dp)) }) else null,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp)
+            )
 
             if (vm.tool == Tool.SELECT && !vm.hasMask && !vm.busy && vm.image != null) {
-                Box(
-                    Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
-                        .clip(RoundedCornerShape(50)).background(Color(0x99000000))
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                ) { Text("Tocca un oggetto o trascina un riquadro", color = Color.White, fontSize = 13.sp) }
+                Surface(
+                    shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
+                ) { Text("Tocca un oggetto o trascina un riquadro", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
             }
 
             // tasto prima/dopo: tieni premuto per vedere la foto originale
@@ -285,7 +296,7 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
                 Box(
                     Modifier.align(Alignment.TopEnd).padding(8.dp).size(44.dp)
                         .clip(RoundedCornerShape(50))
-                        .background(if (vm.comparing) Mint else Color(0x66000000))
+                        .background(if (vm.comparing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f))
                         .pointerInput(Unit) {
                             detectTapGestures(onPress = {
                                 vm.comparing = true
@@ -294,15 +305,17 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.Compare, "Prima/Dopo", tint = if (vm.comparing) Color.Black else Color.White)
+                    Icon(Icons.Filled.Compare, "Prima/Dopo", tint = if (vm.comparing) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
                 }
             }
 
             if (vm.busy) {
                 Box(Modifier.fillMaxSize().background(Color(0x88000000)), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = Mint)
-                        Text(vm.busyText, color = Color.White, modifier = Modifier.padding(top = 12.dp))
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
+                        Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator()
+                            Text(vm.busyText, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
+                        }
                     }
                 }
             }
@@ -310,23 +323,25 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
 
         // ---- pannello impostazioni ----
         if (showSettings) {
-            Column(Modifier.fillMaxWidth().background(Panel).padding(horizontal = 16.dp, vertical = 8.dp)) {
-                BrushPreview(vm.brushDp, vm.hardness, vm.maskOpacity)
-                SettingSlider("Dimensione", vm.brushDp, 8f..120f) { vm.brushDp = it }
-                SettingSlider("Durezza", vm.hardness, 0f..1f) { vm.hardness = it }
-                SettingSlider("Opacità", vm.maskOpacity, 0.2f..1f) { vm.maskOpacity = it; vm.touch() }
-                SettingSlider("Espansione bordo", vm.expand, 0f..12f) { vm.expand = it }
+            Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+                    BrushPreview(vm.brushDp, vm.hardness, vm.maskOpacity)
+                    SettingSlider("Dimensione", vm.brushDp, 8f..120f) { vm.brushDp = it }
+                    SettingSlider("Durezza", vm.hardness, 0f..1f) { vm.hardness = it }
+                    SettingSlider("Opacità", vm.maskOpacity, 0.2f..1f) { vm.maskOpacity = it; vm.touch() }
+                    SettingSlider("Espansione bordo", vm.expand, 0f..12f) { vm.expand = it }
+                }
             }
         }
 
         // ---- barra strumenti ----
-        Row(Modifier.fillMaxWidth().background(Ink).padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceAround) {
-            ToolButton(Icons.Filled.TouchApp, "Selezione", vm.tool == Tool.SELECT && !showSettings) { vm.tool = Tool.SELECT; showSettings = false; vm.prepareSegmenter() }
-            ToolButton(Icons.Filled.Brush, "Pennello", vm.tool == Tool.BRUSH && !showSettings) { vm.tool = Tool.BRUSH; showSettings = false }
-            ToolButton(Icons.Filled.Gesture, "Lasso", vm.tool == Tool.LASSO && !showSettings) { vm.tool = Tool.LASSO; showSettings = false }
-            ToolButton(Icons.Filled.Backspace, "Gomma", vm.tool == Tool.ERASER && !showSettings) { vm.tool = Tool.ERASER; showSettings = false }
-            ToolButton(Icons.Filled.Restore, "Ripristina", vm.tool == Tool.RESTORE && !showSettings) { vm.tool = Tool.RESTORE; showSettings = false }
-            ToolButton(Icons.Filled.Tune, "Impostazioni", showSettings) { showSettings = !showSettings }
+        NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+            ToolItem(Icons.Filled.TouchApp, "Selezione", vm.tool == Tool.SELECT && !showSettings) { vm.tool = Tool.SELECT; showSettings = false; vm.prepareSegmenter() }
+            ToolItem(Icons.Filled.Brush, "Pennello", vm.tool == Tool.BRUSH && !showSettings) { vm.tool = Tool.BRUSH; showSettings = false }
+            ToolItem(Icons.Filled.Gesture, "Lasso", vm.tool == Tool.LASSO && !showSettings) { vm.tool = Tool.LASSO; showSettings = false }
+            ToolItem(Icons.Filled.Backspace, "Gomma", vm.tool == Tool.ERASER && !showSettings) { vm.tool = Tool.ERASER; showSettings = false }
+            ToolItem(Icons.Filled.Restore, "Ripristina", vm.tool == Tool.RESTORE && !showSettings) { vm.tool = Tool.RESTORE; showSettings = false }
+            ToolItem(Icons.Filled.Tune, "Impostazioni", showSettings) { showSettings = !showSettings }
         }
     }
 }
@@ -334,25 +349,19 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
 @Composable
 private fun SettingSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(0.38f))
-        Slider(
-            value = value, onValueChange = onChange, valueRange = range,
-            colors = SliderDefaults.colors(thumbColor = Mint, activeTrackColor = Mint),
-            modifier = Modifier.weight(0.62f)
-        )
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(0.38f))
+        Slider(value = value, onValueChange = onChange, valueRange = range, modifier = Modifier.weight(0.62f))
     }
 }
 
 @Composable
-private fun ToolButton(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
-    val tint = if (selected) Mint else Color(0xFF9AA5A1)
-    Column(
-        Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 6.dp, vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(icon, label, tint = tint, modifier = Modifier.size(24.dp))
-        Text(label, color = tint, fontSize = 11.sp)
-    }
+private fun androidx.compose.foundation.layout.RowScope.ToolItem(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
+    NavigationBarItem(
+        selected = selected, onClick = onClick,
+        icon = { Icon(icon, label) },
+        label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1) },
+        alwaysShowLabel = true
+    )
 }
 
 /** Anteprima del pennello: tratto d'esempio con dimensione, durezza e opacità correnti. */
@@ -369,7 +378,7 @@ private fun BrushPreview(sizeDp: Float, hardness: Float, opacity: Float) {
     val path = remember { android.graphics.Path() }
     Box(
         Modifier.fillMaxWidth().height(110.dp).padding(bottom = 6.dp)
-            .clip(RoundedCornerShape(12.dp)).background(Color(0xFF2B3330))
+            .clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh)
     ) {
         Canvas(Modifier.fillMaxSize()) {
             val r = sizeDp * density / 2f

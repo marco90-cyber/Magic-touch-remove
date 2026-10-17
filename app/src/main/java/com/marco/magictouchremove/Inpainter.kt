@@ -2,9 +2,11 @@ package com.marco.magictouchremove
 
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OnnxJavaType
 import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.graphics.Bitmap
+import java.nio.ByteBuffer
 import java.nio.FloatBuffer
 import kotlin.math.max
 import kotlin.math.min
@@ -16,20 +18,12 @@ import kotlin.math.min
  * attorno alla maschera (con contesto), si ricostruisce lì e si reincolla nell'immagine
  * originale a piena risoluzione, sostituendo SOLO i pixel mascherati (bordo sfumato).
  */
-class Inpainter private constructor(modelPath: String) {
-    private val env = OrtEnvironment.getEnvironment()
-    private val session: OrtSession
-    private val imageInput: String
-    private val maskInput: String
+abstract class Inpainter {
+    protected val env: OrtEnvironment = OrtEnvironment.getEnvironment()
 
-    init {
-        val opts = OrtSession.SessionOptions()
-        opts.setIntraOpNumThreads(4)
-        session = env.createSession(modelPath, opts)
-        val names = session.inputNames.toList()
-        imageInput = names.firstOrNull { it.contains("image", true) } ?: names[0]
-        maskInput = names.firstOrNull { it.contains("mask", true) } ?: names[1]
-    }
+    /** Ricostruisce un quadrato n×n: [px] pixel ARGB, [hole] true dove ricostruire. Ritorna i pixel risultanti. */
+    protected abstract fun run512(px: IntArray, hole: BooleanArray, n: Int): IntArray
+    protected abstract fun close()
 
     /** @param mask bitmap ALPHA_8 della stessa dimensione di [image]. Ritorna null se la maschera è vuota. */
     fun inpaint(image: Bitmap, mask: Bitmap, expand: Int): Bitmap? {
@@ -84,36 +78,7 @@ class Inpainter private constructor(modelPath: String) {
         in512.getPixels(ipx, 0, n, 0, 0, n, n)
 
         val plane = n * n
-        val imgArr = FloatArray(3 * plane)
-        val maskArr = FloatArray(plane)
-        for (i in 0 until plane) {
-            val p = ipx[i]
-            imgArr[i] = ((p shr 16) and 255) / 255f
-            imgArr[plane + i] = ((p shr 8) and 255) / 255f
-            imgArr[2 * plane + i] = (p and 255) / 255f
-            maskArr[i] = if (m512[i]) 1f else 0f
-        }
-
-        val outPx = IntArray(plane)
-        val shapeImg = longArrayOf(1, 3, n.toLong(), n.toLong())
-        val shapeMask = longArrayOf(1, 1, n.toLong(), n.toLong())
-        OnnxTensor.createTensor(env, FloatBuffer.wrap(imgArr), shapeImg).use { ti ->
-            OnnxTensor.createTensor(env, FloatBuffer.wrap(maskArr), shapeMask).use { tm ->
-                session.run(mapOf(imageInput to ti, maskInput to tm)).use { res ->
-                    @Suppress("UNCHECKED_CAST")
-                    val out = res[0].value as Array<Array<Array<FloatArray>>>
-                    var mx = 0f
-                    for (c in 0 until 3) for (y in 0 until n) for (x in 0 until n) mx = max(mx, out[0][c][y][x])
-                    val k = if (mx <= 2f) 255f else 1f
-                    for (y in 0 until n) for (x in 0 until n) {
-                        val r = (out[0][0][y][x] * k).toInt().coerceIn(0, 255)
-                        val g = (out[0][1][y][x] * k).toInt().coerceIn(0, 255)
-                        val b = (out[0][2][y][x] * k).toInt().coerceIn(0, 255)
-                        outPx[y * n + x] = (255 shl 24) or (r shl 16) or (g shl 8) or b
-                    }
-                }
-            }
-        }
+        val outPx = run512(ipx, m512, n)
 
         // risultato e maschera morbida riportati alla risoluzione del ritaglio
         val outBmp512 = Bitmap.createBitmap(n, n, Bitmap.Config.ARGB_8888)
@@ -168,16 +133,104 @@ class Inpainter private constructor(modelPath: String) {
         return out
     }
 
-    private fun close() { runCatching { session.close() } }
-
     companion object {
-        private const val SIZE = 512
+        const val SIZE = 512
         @Volatile private var instance: Inpainter? = null
+        @Volatile private var instanceId: String? = null
 
-        fun release() = synchronized(this) { instance?.close(); instance = null }
+        fun release() = synchronized(this) { instance?.close(); instance = null; instanceId = null }
 
-        fun get(ctx: Context): Inpainter = instance ?: synchronized(this) {
-            instance ?: Inpainter(ModelManager.file(ctx).absolutePath).also { instance = it }
+        fun get(ctx: Context): Inpainter = synchronized(this) {
+            val opt = ModelManager.active(ctx, Kind.INPAINT) ?: error("Nessun modello di rimozione scaricato")
+            if (instance == null || instanceId != opt.id) {
+                instance?.close()
+                val path = ModelManager.file(ctx, opt.files[0]).absolutePath
+                instance = if (opt.id == "migan") MiganInpainter(path) else LamaInpainter(path)
+                instanceId = opt.id
+            }
+            instance!!
         }
     }
+}
+
+private fun newSession(env: OrtEnvironment, path: String): OrtSession =
+    env.createSession(path, OrtSession.SessionOptions().apply { setIntraOpNumThreads(4) })
+
+/** LaMa (big-lama): immagine float 0..1, maschera 1 = da ricostruire. */
+private class LamaInpainter(path: String) : Inpainter() {
+    private val session = newSession(env, path)
+    private val imageInput: String
+    private val maskInput: String
+    init {
+        val names = session.inputNames.toList()
+        imageInput = names.firstOrNull { it.contains("image", true) } ?: names[0]
+        maskInput = names.firstOrNull { it.contains("mask", true) } ?: names[1]
+    }
+
+    override fun run512(px: IntArray, hole: BooleanArray, n: Int): IntArray {
+        val plane = n * n
+        val imgArr = FloatArray(3 * plane)
+        val maskArr = FloatArray(plane)
+        for (i in 0 until plane) {
+            val p = px[i]
+            imgArr[i] = ((p shr 16) and 255) / 255f
+            imgArr[plane + i] = ((p shr 8) and 255) / 255f
+            imgArr[2 * plane + i] = (p and 255) / 255f
+            maskArr[i] = if (hole[i]) 1f else 0f
+        }
+        val outPx = IntArray(plane)
+        val shapeImg = longArrayOf(1, 3, n.toLong(), n.toLong())
+        val shapeMask = longArrayOf(1, 1, n.toLong(), n.toLong())
+        OnnxTensor.createTensor(env, FloatBuffer.wrap(imgArr), shapeImg).use { ti ->
+            OnnxTensor.createTensor(env, FloatBuffer.wrap(maskArr), shapeMask).use { tm ->
+                session.run(mapOf(imageInput to ti, maskInput to tm)).use { res ->
+                    @Suppress("UNCHECKED_CAST")
+                    val out = res[0].value as Array<Array<Array<FloatArray>>>
+                    var mx = 0f
+                    for (c in 0 until 3) for (y in 0 until n) for (x in 0 until n) mx = max(mx, out[0][c][y][x])
+                    val k = if (mx <= 2f) 255f else 1f
+                    for (y in 0 until n) for (x in 0 until n) {
+                        val r = (out[0][0][y][x] * k).toInt().coerceIn(0, 255)
+                        val g = (out[0][1][y][x] * k).toInt().coerceIn(0, 255)
+                        val b = (out[0][2][y][x] * k).toInt().coerceIn(0, 255)
+                        outPx[y * n + x] = (255 shl 24) or (r shl 16) or (g shl 8) or b
+                    }
+                }
+            }
+        }
+        return outPx
+    }
+    override fun close() { runCatching { session.close() } }
+}
+
+/** MI-GAN (pipeline ONNX): immagine uint8 0..255, maschera uint8 con 255 = da mantenere e 0 = da ricostruire. */
+private class MiganInpainter(path: String) : Inpainter() {
+    private val session = newSession(env, path)
+
+    override fun run512(px: IntArray, hole: BooleanArray, n: Int): IntArray {
+        val plane = n * n
+        val img = ByteBuffer.allocateDirect(3 * plane)
+        val msk = ByteBuffer.allocateDirect(plane)
+        for (i in 0 until plane) img.put(i, ((px[i] shr 16) and 255).toByte())
+        for (i in 0 until plane) img.put(plane + i, ((px[i] shr 8) and 255).toByte())
+        for (i in 0 until plane) img.put(2 * plane + i, (px[i] and 255).toByte())
+        for (i in 0 until plane) msk.put(i, if (hole[i]) 0.toByte() else 255.toByte())
+        val outPx = IntArray(plane)
+        val n8 = n.toLong()
+        OnnxTensor.createTensor(env, img, longArrayOf(1, 3, n8, n8), OnnxJavaType.UINT8).use { ti ->
+            OnnxTensor.createTensor(env, msk, longArrayOf(1, 1, n8, n8), OnnxJavaType.UINT8).use { tm ->
+                session.run(mapOf("image" to ti, "mask" to tm)).use { res ->
+                    val ob = (res[0] as OnnxTensor).byteBuffer
+                    for (i in 0 until plane) {
+                        val r = ob.get(i).toInt() and 255
+                        val g = ob.get(plane + i).toInt() and 255
+                        val b = ob.get(2 * plane + i).toInt() and 255
+                        outPx[i] = (255 shl 24) or (r shl 16) or (g shl 8) or b
+                    }
+                }
+            }
+        }
+        return outPx
+    }
+    override fun close() { runCatching { session.close() } }
 }

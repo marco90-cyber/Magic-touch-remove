@@ -33,6 +33,39 @@
       "urls": [
         "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/sam-v1/sam_mask_decoder_multi.onnx"
       ]
+    },
+    {
+      "file": "migan_pipeline_v2.onnx",
+      "version": 1,
+      "minApp": 1,
+      "size": 28079181,
+      "sha256": "6f1f3530a1a2324b19752018ce756088b07973cda8d7d890034ace5c8a48c40b",
+      "notes": "",
+      "urls": [
+        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/migan-v1/migan_pipeline_v2.onnx"
+      ]
+    },
+    {
+      "file": "sam2_hiera_tiny.encoder.onnx",
+      "version": 1,
+      "minApp": 1,
+      "size": 134261315,
+      "sha256": "4cc015ee18520e93f8c7ddfeaca7436039daaaaf19721b4b96a8810a805e82f7",
+      "notes": "",
+      "urls": [
+        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/sam2-v1/sam2_hiera_tiny.encoder.onnx"
+      ]
+    },
+    {
+      "file": "sam2_hiera_tiny.decoder.onnx",
+      "version": 1,
+      "minApp": 1,
+      "size": 20640886,
+      "sha256": "f5a4bd656c143899fb7f52d64ed81e6f6aeb37d477a0b6da50146ac7cf2187bf",
+      "notes": "",
+      "urls": [
+        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/sam2-v1/sam2_hiera_tiny.decoder.onnx"
+      ]
     }
   ]
 }

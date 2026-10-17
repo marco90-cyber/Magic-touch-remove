@@ -1,6 +1,6 @@
 package com.marco.magictouchremove
 
-import androidx.compose.foundation.BorderStroke
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,13 +10,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -24,12 +23,15 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,20 +47,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import android.widget.Toast
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-private val Muted = Color(0xFF8A9792)
 private val ClaudeOrange = Color(0xFFD97757)
 private const val GITHUB_USER = "marco90-cyber"
 private const val REPO_URL = "https://github.com/marco90-cyber/Magic-touch-remove"
-
-private fun fmtSize(bytes: Long): String =
-    if (bytes >= 1_000_000) "${bytes / 1_000_000} MB" else if (bytes > 0) "${bytes / 1000} KB" else "—"
 
 @Composable
 fun InfoDialog(model: ModelState, onDismiss: () -> Unit) {
@@ -68,32 +66,34 @@ fun InfoDialog(model: ModelState, onDismiss: () -> Unit) {
         runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "?"
     }
     val remote by ModelManager.remote.collectAsStateWithLifecycle()
+    @Suppress("UNUSED_VARIABLE") val rev by ModelManager.rev.collectAsStateWithLifecycle()
     val checking by ModelManager.checking.collectAsStateWithLifecycle()
     val checkFailed by ModelManager.checkFailed.collectAsStateWithLifecycle()
     val updateError by ModelManager.updateError.collectAsStateWithLifecycle()
-    val infos = remember(model, remote) { ModelManager.infos(ctx) }
-    val hasUpdate = infos.any { it.update }
     val appState by AppUpdater.state.collectAsStateWithLifecycle()
-    val total = infos.sumOf { it.sizeBytes }
+    val hasUpdate = ModelManager.updateAvailable(ctx)
+    val total = ALL_OPTIONS.sumOf { ModelManager.installedSize(ctx, it) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var deleteOne by remember { mutableStateOf<ModelOption?>(null) }
+    var showChooser by remember { mutableStateOf(false) }
+    val cs = MaterialTheme.colorScheme
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
-            shape = RoundedCornerShape(24.dp), color = Panel,
-            border = BorderStroke(1.dp, Color(0xFF26302D)),
-            modifier = Modifier.fillMaxWidth().padding(16.dp).heightIn(max = 680.dp)
+            shape = MaterialTheme.shapes.extraLarge, color = cs.surfaceContainerLow,
+            modifier = Modifier.fillMaxWidth().padding(16.dp).heightIn(max = 700.dp)
         ) {
             Column {
-                Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Informazioni", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, "Chiudi", tint = Color.White) }
+                Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Informazioni", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                    IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, "Chiudi") }
                 }
                 Column(
-                    Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Magic Touch Remove", color = Mint, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text("Rimuovi oggetti dalle foto con l'intelligenza artificiale, direttamente sul telefono.", color = Muted, fontSize = 13.sp)
+                    Text("Magic Touch Remove", style = MaterialTheme.typography.titleLarge, color = cs.primary)
+                    Body("Rimuovi oggetti dalle foto con l'intelligenza artificiale, direttamente sul telefono.")
 
                     Section("Sviluppatori")
                     DevRow(
@@ -111,23 +111,21 @@ fun InfoDialog(model: ModelState, onDismiss: () -> Unit) {
                                 Icon(Icons.Filled.AutoAwesome, "Claude", tint = ClaudeOrange, modifier = Modifier.size(22.dp))
                             }
                         },
-                        name = "Claude", role = "Anthropic · scrittura del codice e integrazione dei modelli IA",
-                        onClick = null
+                        name = "Claude", role = "Anthropic · scrittura del codice e integrazione dei modelli IA", onClick = null
                     )
                     DevRow(
                         icon = {
                             Box(Modifier.size(40.dp).clip(CircleShape).background(Color(0xFF24292E)), contentAlignment = Alignment.Center) {
-                                Icon(painterResource(R.drawable.ic_github), "Codice sorgente", tint = Mint, modifier = Modifier.size(24.dp))
+                                Icon(painterResource(R.drawable.ic_github), "Codice sorgente", tint = Color(0xFF2EE6A6), modifier = Modifier.size(24.dp))
                             }
                         },
-                        name = "Codice sorgente", role = "Apri il repository su GitHub",
-                        onClick = { uri.openUri(REPO_URL) }
+                        name = "Codice sorgente", role = "Apri il repository su GitHub", onClick = { uri.openUri(REPO_URL) }
                     )
 
                     Section("App")
                     InfoRow("Versione", version)
                     InfoRow("Linguaggio", "Kotlin")
-                    InfoRow("Interfaccia", "Jetpack Compose (Material 3)")
+                    InfoRow("Interfaccia", "Jetpack Compose · Material Design 3")
                     InfoRow("Motore IA", "ONNX Runtime 1.20.0 (sul dispositivo)")
                     InfoRow("Richiede", "Android 10 o superiore")
 
@@ -142,7 +140,8 @@ fun InfoDialog(model: ModelState, onDismiss: () -> Unit) {
                             is UpdateState.Error -> a.message
                             else -> "Versione installata: $version"
                         },
-                        color = if (appState is UpdateState.Available || appState is UpdateState.Ready) Mint else Muted, fontSize = 13.sp
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (appState is UpdateState.Available || appState is UpdateState.Ready) cs.primary else cs.onSurfaceVariant
                     )
                     if (appState is UpdateState.Available || appState is UpdateState.Ready) {
                         Button(
@@ -151,43 +150,83 @@ fun InfoDialog(model: ModelState, onDismiss: () -> Unit) {
                                 if (appState is UpdateState.Ready) AppUpdater.install(ctx) else AppUpdater.download(ctx)
                                 onDismiss()
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Color.Black),
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text(if (appState is UpdateState.Ready) "Installa" else "Aggiorna l'app", fontWeight = FontWeight.Bold) }
+                        ) { Text(if (appState is UpdateState.Ready) "Installa" else "Aggiorna l'app") }
                     }
                     OutlinedButton(
                         onClick = { AppUpdater.check(ctx) },
                         enabled = appState !is UpdateState.Checking && appState !is UpdateState.Downloading,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (appState is UpdateState.Checking) "Controllo in corso…" else "Controlla aggiornamenti dell'app", color = Color.White) }
+                    ) { Text(if (appState is UpdateState.Checking) "Controllo in corso…" else "Controlla aggiornamenti dell'app") }
 
-                    Section("Modelli IA scaricati")
-                    infos.forEach { m ->
-                        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(m.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                                Text(if (m.present) "Scaricato" else "Non scaricato", color = if (m.present) Mint else Color(0xFFFF8A80), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Section("Modelli IA")
+                    Body("Scegli quale modello usare per ogni funzione. Quello selezionato è usato nell'editor.")
+                    for (kind in Kind.values()) {
+                        Text(
+                            if (kind == Kind.INPAINT) "Rimozione oggetti" else "Selezione automatica",
+                            style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 4.dp)
+                        )
+                        val activeId = ModelManager.active(ctx, kind)?.id
+                        ModelManager.options(kind).forEach { o ->
+                            val have = ModelManager.installed(ctx, o)
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (o.id == activeId) cs.secondaryContainer else cs.surfaceContainerHigh
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(
+                                        Modifier.fillMaxWidth().selectable(
+                                            selected = o.id == activeId, enabled = have, role = Role.RadioButton,
+                                            onClick = { ModelManager.setActive(ctx, o) }
+                                        ),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(selected = o.id == activeId, onClick = null, enabled = have)
+                                        Spacer(Modifier.width(10.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(o.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                            Text(
+                                                if (o.id == activeId) "In uso · ${o.tagline}" else if (have) "Tocca per usarlo · ${o.tagline}" else "Non scaricato · ${o.tagline}",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = if (o.id == activeId) cs.primary else cs.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    ChipsRow(o.chips)
+                                    Text(o.description, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                                    Text(
+                                        "Licenza ${o.license} · " + (if (have) fmtSize(ModelManager.installedSize(ctx, o)) else fmtSize(o.size)) +
+                                            (if (have) " · v${ModelManager.installedVersionOf(ctx, o)}" else ""),
+                                        style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant
+                                    )
+                                    if (ModelManager.updateAvailable(ctx, o)) Text(
+                                        "Aggiornamento disponibile: v${ModelManager.latestVersionOf(ctx, o)}" + (ModelManager.notesOf(ctx, o)?.let { " · $it" } ?: ""),
+                                        style = MaterialTheme.typography.labelMedium, color = cs.primary
+                                    )
+                                    Text(
+                                        "Scaricato da: ${o.sourceName}", style = MaterialTheme.typography.bodySmall, color = cs.primary,
+                                        modifier = Modifier.clickable { uri.openUri(o.sourceUrl) }
+                                    )
+                                    Text(
+                                        "Copia di riserva: github.com/marco90-cyber/Magic-touch-remove › Releases › ${o.release}",
+                                        style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant
+                                    )
+                                    if (have) TextButton(onClick = { deleteOne = o }, enabled = model !is ModelState.Downloading) {
+                                        Icon(Icons.Filled.Delete, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Elimina questo modello")
+                                    }
+                                }
                             }
-                            Text("${m.role} · ${m.version}", color = Muted, fontSize = 12.sp)
-                            Text("Licenza ${m.license} · ${fmtSize(m.sizeBytes)}", color = Muted, fontSize = 12.sp)
-                            Text("File: ${m.fileName}", color = Muted, fontSize = 12.sp)
-                            if (m.present) Text("Versione installata: v${m.installed}", color = Muted, fontSize = 12.sp)
-                            if (m.update) Text(
-                                "Aggiornamento disponibile: v${m.latest}" + (m.notes?.let { " · $it" } ?: ""),
-                                color = Mint, fontSize = 12.sp, fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                "Scaricato da: ${m.source}", color = Mint, fontSize = 12.sp,
-                                modifier = Modifier.clickable { uri.openUri(m.sourceUrl) }
-                            )
-                            Text("Se non risponde: ${m.mirror}", color = Muted, fontSize = 12.sp)
                         }
                     }
-                    Text(
-                        "Origine dei download: i modelli vengono scaricati direttamente sul telefono, la prima fonte è Hugging Face (repository dei " +
-                            "rispettivi autori); se non è raggiungibile l'app usa le copie identiche pubblicate nelle Releases del repository GitHub del progetto. " +
-                            "Nessun server di terze parti intermedio e nessun dato personale inviato. I file vengono salvati nella memoria interna dell'app.",
-                        color = Muted, fontSize = 12.sp
+                    Button(onClick = { showChooser = true }, enabled = model !is ModelState.Downloading, modifier = Modifier.fillMaxWidth()) {
+                        Text("Scarica altri modelli")
+                    }
+                    Body(
+                        "Origine dei download: i modelli vengono scaricati direttamente sul telefono. LaMa e MobileSAM da Hugging Face (repository dei " +
+                            "rispettivi autori), MI-GAN e SAM 2 dalle Releases del repository GitHub del progetto; se la prima fonte non risponde l'app usa la copia " +
+                            "identica nelle Releases. Nessun server intermedio e nessun dato personale inviato. I file stanno nella memoria interna dell'app."
                     )
                     InfoRow("Spazio occupato", fmtSize(total))
 
@@ -200,66 +239,48 @@ fun InfoDialog(model: ModelState, onDismiss: () -> Unit) {
                             remote.isNotEmpty() -> "I modelli sono aggiornati."
                             else -> "Controllo in corso…"
                         },
-                        color = if (hasUpdate) Mint else Muted, fontSize = 13.sp
+                        style = MaterialTheme.typography.bodyMedium, color = if (hasUpdate) cs.primary else cs.onSurfaceVariant
                     )
-                    updateError?.let { Text("Errore aggiornamento: $it", color = Color(0xFFFF8A80), fontSize = 12.sp) }
-                    if (model is ModelState.Downloading) {
-                        LinearProgressIndicator(progress = { model.progress }, color = Mint, modifier = Modifier.fillMaxWidth())
-                    }
+                    updateError?.let { Text("Errore: $it", style = MaterialTheme.typography.bodySmall, color = cs.error) }
+                    if (model is ModelState.Downloading) LinearProgressIndicator(progress = { model.progress }, modifier = Modifier.fillMaxWidth())
                     if (hasUpdate && model !is ModelState.Downloading) {
-                        Button(
-                            onClick = { ModelManager.update(ctx) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Color.Black),
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("Aggiorna modelli", fontWeight = FontWeight.Bold) }
+                        Button(onClick = { ModelManager.update(ctx) }, modifier = Modifier.fillMaxWidth()) { Text("Aggiorna modelli") }
                     }
                     OutlinedButton(
-                        onClick = { ModelManager.checkUpdates(ctx) },
-                        enabled = !checking && model !is ModelState.Downloading,
+                        onClick = { ModelManager.checkUpdates(ctx) }, enabled = !checking && model !is ModelState.Downloading,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (checking) "Controllo in corso…" else "Controlla aggiornamenti", color = Color.White) }
-                    Text(
-                        "L'app confronta le versioni installate con l'elenco models.json del repository GitHub. " +
-                            "Gli aggiornamenti sono verificati con SHA-256 e proposti solo se compatibili con questa versione dell'app. " +
-                            "Non si aggiorna mai nulla senza il tuo consenso.",
-                        color = Muted, fontSize = 12.sp
+                    ) { Text(if (checking) "Controllo in corso…" else "Controlla aggiornamenti") }
+                    Body(
+                        "L'app confronta le versioni installate con l'elenco models.json del repository GitHub. Gli aggiornamenti sono verificati con SHA-256 " +
+                            "e proposti solo se compatibili con questa versione dell'app. Non si aggiorna mai nulla senza il tuo consenso."
                     )
-                    Spacer(Modifier.height(4.dp))
                     OutlinedButton(
-                        onClick = { confirmDelete = true },
-                        enabled = total > 0 && model !is ModelState.Downloading,
-                        border = BorderStroke(1.dp, Color(0xFFFF8A80)),
+                        onClick = { confirmDelete = true }, enabled = total > 0 && model !is ModelState.Downloading,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Filled.Delete, null, tint = Color(0xFFFF8A80), modifier = Modifier.size(18.dp))
+                        Icon(Icons.Filled.Delete, null, tint = cs.error, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Elimina dati modelli", color = Color(0xFFFF8A80))
+                        Text("Elimina dati modelli", color = cs.error)
                     }
-                    Text(
-                        "Libera lo spazio sul telefono. Per usare di nuovo l'app dovrai riscaricare i modelli.",
-                        color = Muted, fontSize = 12.sp
-                    )
+                    Body("Libera lo spazio sul telefono. Per usare di nuovo l'app dovrai riscaricare i modelli.")
 
                     Section("Privacy")
-                    Text(
-                        "Le foto vengono elaborate solo sul tuo telefono e non sono mai inviate a server. La connessione serve solo per scaricare i modelli.",
-                        color = Muted, fontSize = 13.sp
-                    )
+                    Body("Le foto vengono elaborate solo sul tuo telefono e non sono mai inviate a server. La connessione serve solo per scaricare i modelli.")
 
                     Section("Crediti e licenze")
-                    Text("LaMa – Resolution-robust Large Mask Inpainting (Apache-2.0)", color = Muted, fontSize = 12.sp)
-                    Text("MobileSAM – Faster Segment Anything (MIT) · conversione ONNX di Acly", color = Muted, fontSize = 12.sp)
-                    Text("ONNX Runtime – Microsoft (MIT)", color = Muted, fontSize = 12.sp)
-                    Spacer(Modifier.height(8.dp))
+                    Body("LaMa – Resolution-robust Large Mask Inpainting (Apache-2.0)")
+                    Body("MI-GAN – Picsart AI Research (MIT)")
+                    Body("MobileSAM – Faster Segment Anything (MIT) · conversione ONNX di Acly")
+                    Body("SAM 2 – Meta AI (Apache-2.0) · conversione ONNX di vietanhdev")
+                    Body("ONNX Runtime – Microsoft (MIT)")
+                    Spacer(Modifier.size(8.dp))
                 }
-                Button(
-                    onClick = onDismiss,
-                    colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Color.Black),
-                    modifier = Modifier.fillMaxWidth().padding(16.dp)
-                ) { Text("Chiudi", fontWeight = FontWeight.Bold) }
+                Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth().padding(16.dp)) { Text("Chiudi") }
             }
         }
     }
+
+    if (showChooser) ModelChooserDialog(onDismiss = { showChooser = false }, onConfirm = { ModelManager.download(ctx, it) })
 
     if (confirmDelete) {
         AlertDialog(
@@ -271,31 +292,51 @@ fun InfoDialog(model: ModelState, onDismiss: () -> Unit) {
                     confirmDelete = false
                     val ok = ModelManager.deleteAll(ctx)
                     Toast.makeText(ctx, if (ok) "Modelli eliminati" else "Download in corso, riprova più tardi", Toast.LENGTH_SHORT).show()
-                }) { Text("Elimina", color = Color(0xFFFF8A80)) }
+                }) { Text("Elimina", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Annulla") } }
+        )
+    }
+    deleteOne?.let { o ->
+        AlertDialog(
+            onDismissRequest = { deleteOne = null },
+            title = { Text("Eliminare ${o.title}?") },
+            text = { Text("Verranno cancellati ${fmtSize(ModelManager.installedSize(ctx, o))}. Potrai riscaricarlo quando vuoi.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleteOne = null
+                    val ok = ModelManager.delete(ctx, o)
+                    Toast.makeText(ctx, if (ok) "Modello eliminato" else "Download in corso, riprova più tardi", Toast.LENGTH_SHORT).show()
+                }) { Text("Elimina", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { deleteOne = null }) { Text("Annulla") } }
         )
     }
 }
 
 @Composable
 private fun Section(title: String) {
-    Spacer(Modifier.height(10.dp))
-    Text(title.uppercase(), color = Mint, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+    Spacer(Modifier.size(6.dp))
+    HorizontalDivider()
+    Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 6.dp))
 }
+
+@Composable
+private fun Body(text: String) =
+    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
 @Composable
 private fun InfoRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        Text(label, color = Muted, fontSize = 13.sp, modifier = Modifier.weight(0.4f))
-        Text(value, color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(0.6f))
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(0.4f))
+        Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(0.6f))
     }
 }
 
 @Composable
 private fun DevRow(icon: @Composable () -> Unit, name: String, role: String, onClick: (() -> Unit)?) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -303,8 +344,8 @@ private fun DevRow(icon: @Composable () -> Unit, name: String, role: String, onC
         icon()
         Spacer(Modifier.width(12.dp))
         Column {
-            Text(name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Text(role, color = Muted, fontSize = 12.sp)
+            Text(name, style = MaterialTheme.typography.titleSmall)
+            Text(role, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

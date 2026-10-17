@@ -30,7 +30,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
@@ -43,20 +42,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.foundation.layout.Row
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(AColor.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(AColor.TRANSPARENT)
+            statusBarStyle = SystemBarStyle.auto(AColor.TRANSPARENT, AColor.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(AColor.TRANSPARENT, AColor.TRANSPARENT)
         )
         ModelManager.init(applicationContext)
         ModelManager.checkUpdates(applicationContext)   // controlla se ci sono nuove versioni dei modelli
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme(primary = Mint, background = Ink, surface = Panel)) {
-                App()
-            }
+            MagicTheme { App() }
         }
     }
 }
@@ -79,13 +82,13 @@ private fun App() {
     val inEditor = vm.image != null
     BackHandler(enabled = inEditor) { if (vm.hasChanges) confirmExit = true else vm.close() }
 
-    androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(Ink).systemBarsPadding()) {
+    androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(if (inEditor) Color.Black else MaterialTheme.colorScheme.background).systemBarsPadding()) {
         if (inEditor) {
-            EditorScreen(vm, onBack = { if (vm.hasChanges) confirmExit = true else vm.close() })
+            MagicTheme(dark = true) { EditorScreen(vm, onBack = { if (vm.hasChanges) confirmExit = true else vm.close() }) }
         } else {
             HomeScreen(
                 model = model,
-                onDownload = { ModelManager.download(ctx) },
+                onDownload = { ModelManager.download(ctx, it) },
                 onUpdate = { ModelManager.update(ctx) },
                 onPick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
             )
@@ -93,27 +96,18 @@ private fun App() {
     }
 
     if (confirmExit) {
-        Dialog(onDismissRequest = { confirmExit = false }) {
-            Surface(shape = RoundedCornerShape(24.dp), color = Panel, border = BorderStroke(1.dp, Color(0xFF26302D))) {
-                Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Salvare la foto?", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        "Hai modificato la foto. Vuoi salvarla nella galleria prima di uscire?",
-                        color = Color(0xFFB8C2BE), fontSize = 14.sp, textAlign = TextAlign.Center
-                    )
-                    Button(
-                        onClick = { confirmExit = false; vm.saveToGallery { vm.close() } },
-                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Color.Black),
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Salva ed esci", fontWeight = FontWeight.Bold) }
-                    TextButton(onClick = { confirmExit = false; vm.close() }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Esci senza salvare", color = Color(0xFFFF8A80))
-                    }
-                    TextButton(onClick = { confirmExit = false }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Annulla", color = Color.White)
-                    }
+        AlertDialog(
+            onDismissRequest = { confirmExit = false },
+            icon = { Icon(Icons.Filled.Save, null) },
+            title = { Text("Salvare la foto?") },
+            text = { Text("Hai modificato la foto. Vuoi salvarla nella galleria prima di uscire?") },
+            confirmButton = { Button(onClick = { confirmExit = false; vm.saveToGallery { vm.close() } }) { Text("Salva ed esci") } },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { confirmExit = false }) { Text("Annulla") }
+                    TextButton(onClick = { confirmExit = false; vm.close() }) { Text("Esci senza salvare", color = MaterialTheme.colorScheme.error) }
                 }
             }
-        }
+        )
     }
 }
