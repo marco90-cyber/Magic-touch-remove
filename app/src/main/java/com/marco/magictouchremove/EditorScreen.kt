@@ -337,7 +337,7 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
                     Text("Pixel in più rispetto al bordo", style = MaterialTheme.typography.labelLarge)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(0, 5, 10, 15).forEach { px ->
-                            FilterChip(selected = vm.selExtra == px, onClick = { vm.setSelExtra(px) }, label = { Text(if (px == 0) "Nessuno" else "+$px px") })
+                            FilterChip(selected = vm.selExtra == px, onClick = { vm.changeSelExtra(px) }, label = { Text(if (px == 0) "Nessuno" else "+$px px") })
                         }
                     }
                     SettingSlider("Durezza ${(vm.selSoft * 100).toInt()}%", vm.selSoft, 0f..1f) { vm.selSoft = it }

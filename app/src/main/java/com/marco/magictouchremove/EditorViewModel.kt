@@ -337,7 +337,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Cambia di quanti pixel la selezione automatica sborda; aggiorna subito la selezione attuale. */
-    fun setSelExtra(px: Int) {
+    fun changeSelExtra(px: Int) {
         if (px == selExtra) return
         selExtra = px
         val raw = selRaw ?: return
