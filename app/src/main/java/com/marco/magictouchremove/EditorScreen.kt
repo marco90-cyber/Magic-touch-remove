@@ -60,6 +60,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -106,13 +107,32 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
     var selStart by remember { mutableStateOf<Offset?>(null) }
     var selEnd by remember { mutableStateOf<Offset?>(null) }
 
-    // adatta l'immagine allo schermo a ogni nuova foto / cambio dimensioni
+    // adatta l'immagine allo schermo a ogni nuova foto; se cambia solo lo spazio (pannelli aperti/chiusi) mantiene zoom e posizione
+    var fittedLoad by remember { mutableIntStateOf(-1) }
+    var lastView by remember { mutableStateOf(IntSize.Zero) }
     LaunchedEffect(vm.loadId, viewSize) {
         val im = vm.image
         if (im != null && viewSize.width > 0 && viewSize.height > 0) {
             val f = min(viewSize.width.toFloat() / im.width, viewSize.height.toFloat() / im.height)
-            fitScale = f; scale = f
-            offset = Offset((viewSize.width - im.width * f) / 2f, (viewSize.height - im.height * f) / 2f)
+            if (fittedLoad != vm.loadId || lastView.width == 0) {
+                fitScale = f; scale = f
+                offset = Offset((viewSize.width - im.width * f) / 2f, (viewSize.height - im.height * f) / 2f)
+                fittedLoad = vm.loadId
+            } else {
+                // stesso centro della zona visibile
+                val ratio = f / fitScale
+                offset = Offset(
+                    offset.x + (viewSize.width - lastView.width) / 2f,
+                    offset.y + (viewSize.height - lastView.height) / 2f
+                )
+                fitScale = f
+                scale = (scale * ratio).coerceIn(f * 0.8f, f * 20f)
+                if (ratio != 1f) offset = Offset(
+                    viewSize.width / 2f - (viewSize.width / 2f - offset.x) * ratio,
+                    viewSize.height / 2f - (viewSize.height / 2f - offset.y) * ratio
+                )
+            }
+            lastView = viewSize
         }
     }
 
@@ -301,7 +321,7 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
             }
 
             if (sizePreview) {
-                Box(Modifier.fillMaxSize().background(Color(0x55000000)), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Box(
                         Modifier.size(vm.brushDp.dp).clip(CircleShape)
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = vm.maskOpacity * 0.6f))
