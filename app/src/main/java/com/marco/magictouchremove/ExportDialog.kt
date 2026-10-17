@@ -48,13 +48,19 @@ private fun prefs(ctx: Context) = ctx.getSharedPreferences("export", Context.MOD
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun ExportDialog(baseW: Int, baseH: Int, onDismiss: () -> Unit, onConfirm: (ExportOptions, Boolean) -> Unit) {
+fun ExportDialog(baseW: Int, baseH: Int, estimate: suspend (ExportOptions) -> Long, onDismiss: () -> Unit, onConfirm: (ExportOptions, Boolean) -> Unit) {
     val ctx = LocalContext.current
     var format by remember { mutableIntStateOf(prefs(ctx).getInt("format", 0)) }
     var quality by remember { mutableFloatStateOf(prefs(ctx).getInt("quality_v2", 100).toFloat().coerceIn(80f, 100f)) }
     var scale by remember { mutableIntStateOf(prefs(ctx).getInt("scale", 100)) }
     var toGallery by remember { mutableStateOf(true) }
     val cs = MaterialTheme.colorScheme
+    var sizeBytes by remember { mutableStateOf<Long?>(null) }
+    androidx.compose.runtime.LaunchedEffect(format, quality.toInt(), scale) {
+        sizeBytes = null
+        kotlinx.coroutines.delay(250)
+        sizeBytes = runCatching { estimate(ExportOptions(format, if (format == 1) 100 else quality.toInt(), scale)) }.getOrNull()
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -87,6 +93,10 @@ fun ExportDialog(baseW: Int, baseH: Int, onDismiss: () -> Unit, onConfirm: (Expo
                         )
                     }
                 }
+                Text(
+                    "Peso stimato: " + (sizeBytes?.let { "circa " + if (it >= 1_000_000) "%.1f MB".format(it / 1_000_000.0) else "${(it / 1000).coerceAtLeast(1)} KB" } ?: "calcolo…"),
+                    style = MaterialTheme.typography.titleSmall
+                )
                 Text(
                     "Originale = stessa risoluzione della foto di partenza: le zone che non hai toccato restano identiche.",
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant

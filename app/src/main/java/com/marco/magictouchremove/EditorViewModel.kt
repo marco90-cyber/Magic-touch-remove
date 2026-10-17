@@ -470,6 +470,22 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         if (!bmp.compress(fmt, o.quality, out)) error("compressione non riuscita")
     }
 
+    /** Stima del peso del file: comprime un ritaglio centrale con le stesse opzioni e lo proporziona ai pixel finali. */
+    suspend fun estimateSize(o: ExportOptions): Long = withContext(Dispatchers.Default) {
+        val im = image ?: return@withContext 0L
+        val bw = if (originalW > 0) originalW else im.width
+        val bh = if (originalH > 0) originalH else im.height
+        val outW = (bw * o.scale / 100).coerceAtLeast(1)
+        val outH = (bh * o.scale / 100).coerceAtLeast(1)
+        val f = min(1f, outW.toFloat() / im.width)
+        val cw = min(im.width, 768); val ch = min(im.height, 768)
+        var s = Bitmap.createBitmap(im, (im.width - cw) / 2, (im.height - ch) / 2, cw, ch)
+        if (f < 1f) s = Bitmap.createScaledBitmap(s, (cw * f).toInt().coerceAtLeast(16), (ch * f).toInt().coerceAtLeast(16), true)
+        val bos = java.io.ByteArrayOutputStream()
+        write(s, o, bos)
+        (bos.size().toDouble() / (s.width.toLong() * s.height) * outW * outH).toLong()
+    }
+
     /**
      * Salva la foto con le opzioni scelte. [dest] = file scelto dall'utente; null = galleria (Immagini/MagicTouchRemove).
      * @param onSaved eseguita (sul thread principale) solo se il salvataggio è riuscito.

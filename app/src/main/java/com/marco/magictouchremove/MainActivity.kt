@@ -121,6 +121,7 @@ private fun App() {
         ExportDialog(
             baseW = if (vm.originalW > 0) vm.originalW else vm.image?.width ?: 1,
             baseH = if (vm.originalH > 0) vm.originalH else vm.image?.height ?: 1,
+            estimate = { vm.estimateSize(it) },
             onDismiss = { exportClose = null },
             onConfirm = { o, toGallery ->
                 exportClose = null
