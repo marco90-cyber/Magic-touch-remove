@@ -25,7 +25,10 @@ private class ModelFile(
 )
 
 /** Dati mostrati nella schermata Informazioni. */
-class ModelInfo(val title: String, val role: String, val version: String, val license: String, val sizeBytes: Long, val present: Boolean)
+class ModelInfo(
+    val title: String, val role: String, val version: String, val license: String, val sizeBytes: Long, val present: Boolean,
+    val fileName: String, val source: String, val sourceUrl: String, val mirror: String
+)
 
 private const val REPO = "https://github.com/marco90-cyber/Magic-touch-remove/releases/download"
 
@@ -73,7 +76,13 @@ object ModelManager {
 
     fun infos(ctx: Context): List<ModelInfo> = ALL.map {
         val f = fileOf(ctx, it)
-        ModelInfo(it.title, it.role, it.version, it.license, if (f.exists()) f.length() else 0L, has(ctx, it))
+        ModelInfo(
+            it.title, it.role, it.version, it.license, if (f.exists()) f.length() else 0L, has(ctx, it),
+            it.name,
+            it.urls.first().substringAfter("https://").substringBefore("/resolve"),
+            it.urls.first().substringBefore("/resolve"),
+            "github.com/marco90-cyber/Magic-touch-remove › Releases › " + it.urls.last().substringAfter("/download/").substringBefore("/")
+        )
     }
 
     /** Elimina tutti i modelli scaricati. Ritorna false se è in corso un download. */

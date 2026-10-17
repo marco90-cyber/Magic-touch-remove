@@ -132,8 +132,20 @@ fun InfoDialog(model: ModelState, onDismiss: () -> Unit) {
                             }
                             Text("${m.role} · ${m.version}", color = Muted, fontSize = 12.sp)
                             Text("Licenza ${m.license} · ${fmtSize(m.sizeBytes)}", color = Muted, fontSize = 12.sp)
+                            Text("File: ${m.fileName}", color = Muted, fontSize = 12.sp)
+                            Text(
+                                "Scaricato da: ${m.source}", color = Mint, fontSize = 12.sp,
+                                modifier = Modifier.clickable { uri.openUri(m.sourceUrl) }
+                            )
+                            Text("Se non risponde: ${m.mirror}", color = Muted, fontSize = 12.sp)
                         }
                     }
+                    Text(
+                        "Origine dei download: i modelli vengono scaricati direttamente sul telefono, la prima fonte è Hugging Face (repository dei " +
+                            "rispettivi autori); se non è raggiungibile l'app usa le copie identiche pubblicate nelle Releases del repository GitHub del progetto. " +
+                            "Nessun server di terze parti intermedio e nessun dato personale inviato. I file vengono salvati nella memoria interna dell'app.",
+                        color = Muted, fontSize = 12.sp
+                    )
                     InfoRow("Spazio occupato", fmtSize(total))
                     Spacer(Modifier.height(4.dp))
                     OutlinedButton(
