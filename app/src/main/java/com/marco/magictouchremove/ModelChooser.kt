@@ -41,7 +41,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun ModelChooserDialog(onDismiss: () -> Unit, onConfirm: (List<ModelOption>) -> Unit) {
     val ctx = LocalContext.current
-    @Suppress("UNUSED_VARIABLE") val rev by ModelManager.rev.collectAsStateWithLifecycle()
+    val rev by ModelManager.rev.collectAsStateWithLifecycle()
+    if (rev < 0) return
     // consigliati di partenza: i due più leggeri non ancora installati, se non c'è nulla; altrimenti nessuno
     val selected: SnapshotStateList<String> = remember {
         val any = ALL_OPTIONS.any { ModelManager.installed(ctx, it) }

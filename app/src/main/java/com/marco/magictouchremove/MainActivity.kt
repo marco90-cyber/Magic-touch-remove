@@ -56,10 +56,11 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.auto(AColor.TRANSPARENT, AColor.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.auto(AColor.TRANSPARENT, AColor.TRANSPARENT)
         )
+        ThemeSettings.init(applicationContext)
         ModelManager.init(applicationContext)
         ModelManager.checkUpdates(applicationContext)   // controlla se ci sono nuove versioni dei modelli
         setContent {
-            MagicTheme { App() }
+            MagicTheme(dark = ThemeSettings.isDark()) { App() }
         }
     }
 }
@@ -80,6 +81,16 @@ private fun App() {
     }
 
     val inEditor = vm.image != null
+    val themeDark = ThemeSettings.isDark()
+    val activity = ctx as ComponentActivity
+    androidx.compose.runtime.DisposableEffect(themeDark, inEditor) {
+        val d = themeDark || inEditor
+        activity.enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(AColor.TRANSPARENT, AColor.TRANSPARENT) { d },
+            navigationBarStyle = SystemBarStyle.auto(AColor.TRANSPARENT, AColor.TRANSPARENT) { d }
+        )
+        onDispose {}
+    }
     BackHandler(enabled = inEditor) { if (vm.hasChanges) confirmExit = true else vm.close() }
 
     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(if (inEditor) Color.Black else MaterialTheme.colorScheme.background).systemBarsPadding()) {

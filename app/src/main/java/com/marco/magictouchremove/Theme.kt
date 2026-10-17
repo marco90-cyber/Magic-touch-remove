@@ -6,6 +6,8 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -55,3 +57,21 @@ fun MagicTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () ->
 
 fun fmtSize(bytes: Long): String =
     if (bytes >= 1_000_000) "${bytes / 1_000_000} MB" else if (bytes > 0) "${bytes / 1000} KB" else "—"
+
+/** Tema scelto dall'utente: 0 = come il sistema, 1 = chiaro, 2 = scuro. */
+object ThemeSettings {
+    var mode by androidx.compose.runtime.mutableIntStateOf(0)
+        private set
+
+    fun init(ctx: android.content.Context) {
+        mode = ctx.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).getInt("theme", 0)
+    }
+
+    fun set(ctx: android.content.Context, m: Int) {
+        mode = m
+        ctx.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).edit().putInt("theme", m).apply()
+    }
+
+    @Composable
+    fun isDark(): Boolean = when (mode) { 1 -> false; 2 -> true; else -> isSystemInDarkTheme() }
+}

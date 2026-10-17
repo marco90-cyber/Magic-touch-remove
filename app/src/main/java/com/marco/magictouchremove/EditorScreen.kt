@@ -10,6 +10,10 @@ import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material.icons.filled.Compare
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.ui.input.pointer.PointerEventPass
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Check
@@ -96,6 +100,8 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
     var cursor by remember { mutableStateOf<Offset?>(null) }
     var showSettings by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
+    var sizePreview by remember { mutableStateOf(false) }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var selStart by remember { mutableStateOf<Offset?>(null) }
     var selEnd by remember { mutableStateOf<Offset?>(null) }
 
@@ -309,6 +315,20 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
                 }
             }
 
+            if (sizePreview) {
+                Box(Modifier.fillMaxSize().background(Color(0x55000000)), contentAlignment = Alignment.Center) {
+                    Box(
+                        Modifier.size(vm.brushDp.dp).clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = vm.maskOpacity * 0.6f))
+                            .border(2.dp, Color.White, CircleShape)
+                    )
+                    Text(
+                        "${vm.brushDp.toInt()}", color = Color.White, style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp)
+                    )
+                }
+            }
+
             if (vm.busy) {
                 Box(Modifier.fillMaxSize().background(Color(0x88000000)), contentAlignment = Alignment.Center) {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
@@ -335,11 +355,34 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
         }
 
         // ---- barra strumenti ----
+        // tieni premuto 1 secondo su Pennello/Gomma, poi trascina a destra/sinistra per cambiare la dimensione
+        val sizeAdjust = { tool: Tool ->
+            Modifier.pointerInput(tool) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    val up = withTimeoutOrNull(1000L) { waitForUpOrCancellation(PointerEventPass.Initial) }
+                    if (up == null && down.pressed) {
+                        vm.tool = tool; showSettings = false; sizePreview = true
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        var lastX = down.position.x
+                        while (true) {
+                            val ev = awaitPointerEvent(PointerEventPass.Initial)
+                            val ch = ev.changes.firstOrNull() ?: break
+                            vm.brushDp = (vm.brushDp + (ch.position.x - lastX) / density * 0.6f).coerceIn(8f, 120f)
+                            lastX = ch.position.x
+                            ch.consume()
+                            if (!ch.pressed) break
+                        }
+                        sizePreview = false
+                    }
+                }
+            }
+        }
         NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
             ToolItem(Icons.Filled.TouchApp, "Selezione", vm.tool == Tool.SELECT && !showSettings) { vm.tool = Tool.SELECT; showSettings = false; vm.prepareSegmenter() }
-            ToolItem(Icons.Filled.Brush, "Pennello", vm.tool == Tool.BRUSH && !showSettings) { vm.tool = Tool.BRUSH; showSettings = false }
+            ToolItem(Icons.Filled.Brush, "Pennello", vm.tool == Tool.BRUSH && !showSettings, sizeAdjust(Tool.BRUSH), { vm.tool = Tool.BRUSH; showSettings = false })
             ToolItem(Icons.Filled.Gesture, "Lasso", vm.tool == Tool.LASSO && !showSettings) { vm.tool = Tool.LASSO; showSettings = false }
-            ToolItem(Icons.Filled.Backspace, "Gomma", vm.tool == Tool.ERASER && !showSettings) { vm.tool = Tool.ERASER; showSettings = false }
+            ToolItem(Icons.Filled.Backspace, "Gomma", vm.tool == Tool.ERASER && !showSettings, sizeAdjust(Tool.ERASER), { vm.tool = Tool.ERASER; showSettings = false })
             ToolItem(Icons.Filled.Restore, "Ripristina", vm.tool == Tool.RESTORE && !showSettings) { vm.tool = Tool.RESTORE; showSettings = false }
             ToolItem(Icons.Filled.Tune, "Impostazioni", showSettings) { showSettings = !showSettings }
         }
@@ -355,9 +398,11 @@ private fun SettingSlider(label: String, value: Float, range: ClosedFloatingPoin
 }
 
 @Composable
-private fun androidx.compose.foundation.layout.RowScope.ToolItem(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
+private fun androidx.compose.foundation.layout.RowScope.ToolItem(
+    icon: ImageVector, label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit
+) {
     NavigationBarItem(
-        selected = selected, onClick = onClick,
+        selected = selected, onClick = onClick, modifier = modifier,
         icon = { Icon(icon, label) },
         label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1) },
         alwaysShowLabel = true

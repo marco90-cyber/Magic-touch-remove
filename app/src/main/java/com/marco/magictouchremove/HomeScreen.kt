@@ -15,7 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
@@ -54,7 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 fun HomeScreen(model: ModelState, onDownload: (List<ModelOption>) -> Unit, onUpdate: () -> Unit, onPick: () -> Unit) {
     val ctx = LocalContext.current
     val remote by ModelManager.remote.collectAsStateWithLifecycle()
-    @Suppress("UNUSED_VARIABLE") val rev by ModelManager.rev.collectAsStateWithLifecycle()
+    val rev by ModelManager.rev.collectAsStateWithLifecycle()
     val modelUpdate = remember(remote, model, rev) { ModelManager.updateAvailable(ctx) }
     val appUpd by AppUpdater.state.collectAsStateWithLifecycle()
     val hasUpdate = modelUpdate || appUpd is UpdateState.Available || appUpd is UpdateState.Ready
@@ -62,8 +62,14 @@ fun HomeScreen(model: ModelState, onDownload: (List<ModelOption>) -> Unit, onUpd
     var showInfo by remember { mutableStateOf(false) }
     var showNeedModels by remember { mutableStateOf(false) }
     var showChooser by remember { mutableStateOf(false) }
-    val ready = ModelManager.isReady(ctx)
+    val ready = rev >= 0 && ModelManager.isReady(ctx)
     val open = { if (ready) onPick() else showNeedModels = true }
+
+    if (showInfo) {
+        SettingsScreen(model) { showInfo = false }
+        AppUpdateDialog()
+        return
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -72,43 +78,32 @@ fun HomeScreen(model: ModelState, onDownload: (List<ModelOption>) -> Unit, onUpd
                 title = { Text("Magic Touch Remove", fontWeight = FontWeight.SemiBold) },
                 actions = {
                     IconButton(onClick = { showInfo = true }) {
-                        BadgedBox(badge = { if (hasUpdate) Badge() }) { Icon(Icons.Filled.Info, "Informazioni sull'app") }
+                        BadgedBox(badge = { if (hasUpdate) Badge() }) { Icon(Icons.Filled.Settings, "Impostazioni") }
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = open,
-                icon = { Icon(Icons.Filled.AddPhotoAlternate, null) },
-                text = { Text("Apri galleria") }
-            )
-        }
     ) { pad ->
         Column(
             Modifier.fillMaxSize().padding(pad).padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Spacer(Modifier.height(24.dp))
-            Box(
-                Modifier.size(112.dp).padding(0.dp),
-                contentAlignment = Alignment.Center
+            Spacer(Modifier.weight(0.5f))
+            androidx.compose.material3.Surface(
+                onClick = open, shape = androidx.compose.foundation.shape.CircleShape,
+                color = MaterialTheme.colorScheme.primary, shadowElevation = 8.dp, modifier = Modifier.size(150.dp)
             ) {
-                androidx.compose.material3.Surface(
-                    shape = androidx.compose.foundation.shape.CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxSize()
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.AutoFixHigh, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(56.dp))
-                    }
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.AddPhotoAlternate, "Apri galleria", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(64.dp))
                 }
             }
-            Text("Rimuovi oggetti dalle foto con l'IA", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+            Text("Apri galleria", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Tutto avviene sul tuo telefono, senza inviare le foto a nessuno.",
+                "Rimuovi oggetti dalle foto con l'IA, tutto sul tuo telefono.",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center
             )
+            Spacer(Modifier.weight(0.4f))
             Spacer(Modifier.height(4.dp))
 
             when (model) {
@@ -156,17 +151,10 @@ fun HomeScreen(model: ModelState, onDownload: (List<ModelOption>) -> Unit, onUpd
                     }
                 }
             }
-            OutlinedCard(Modifier.fillMaxWidth()) {
-                Text(
-                    "Suggerimento: nell'editor usa Selezione per toccare un oggetto, poi premi Cancella AI.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
+            Spacer(Modifier.height(16.dp))
         }
     }
 
-    if (showInfo) InfoDialog(model) { showInfo = false }
     AppUpdateDialog()
     if (showChooser) ModelChooserDialog(onDismiss = { showChooser = false }, onConfirm = onDownload)
     if (showNeedModels) {
