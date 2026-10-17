@@ -189,6 +189,15 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
 
                 }
                 Page.MODELS -> {
+                    (model as? ModelState.Downloading)?.let { dl ->
+                        Card(colors = CardDefaults.cardColors(containerColor = cs.primaryContainer), modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Download in corso… ${(dl.progress * 100).toInt()}%", style = MaterialTheme.typography.titleMedium, color = cs.onPrimaryContainer)
+                                LinearProgressIndicator(progress = { dl.progress }, modifier = Modifier.fillMaxWidth())
+                                Text("Tieni l'app aperta finché non finisce.", style = MaterialTheme.typography.bodySmall, color = cs.onPrimaryContainer)
+                            }
+                        }
+                    }
                     Section("Modelli IA")
 
         Body("Scegli quale modello usare per ogni funzione. Quello selezionato è usato nell'editor.")

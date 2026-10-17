@@ -129,23 +129,7 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
             actions = {
                 IconButton(onClick = { vm.undo() }, enabled = vm.canUndo && !vm.busy) { Icon(Icons.AutoMirrored.Filled.Undo, "Annulla") }
                 IconButton(onClick = { vm.redo() }, enabled = vm.canRedo && !vm.busy) { Icon(Icons.AutoMirrored.Filled.Redo, "Ripeti") }
-                Box {
-                    IconButton(onClick = { showMenu = true }) { Icon(Icons.Filled.IosShare, "Esporta") }
-                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                        DropdownMenuItem(text = { Text("Salva in galleria") }, leadingIcon = { Icon(Icons.Filled.Save, null) }, onClick = { showMenu = false; onSave() })
-                        DropdownMenuItem(text = { Text("Condividi") }, leadingIcon = { Icon(Icons.Filled.IosShare, null) }, onClick = {
-                            showMenu = false
-                            vm.share { uri ->
-                                val i = Intent(Intent.ACTION_SEND).apply {
-                                    type = "image/jpeg"
-                                    putExtra(Intent.EXTRA_STREAM, uri)
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                ctx.startActivity(Intent.createChooser(i, "Condividi"))
-                            }
-                        })
-                    }
-                }
+                IconButton(onClick = onSave) { Icon(Icons.Filled.IosShare, "Salva / esporta") }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black, navigationIconContentColor = Color.White, actionIconContentColor = Color.White)
         )

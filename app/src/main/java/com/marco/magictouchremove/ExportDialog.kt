@@ -51,7 +51,7 @@ private fun prefs(ctx: Context) = ctx.getSharedPreferences("export", Context.MOD
 fun ExportDialog(baseW: Int, baseH: Int, onDismiss: () -> Unit, onConfirm: (ExportOptions, Boolean) -> Unit) {
     val ctx = LocalContext.current
     var format by remember { mutableIntStateOf(prefs(ctx).getInt("format", 0)) }
-    var quality by remember { mutableFloatStateOf(prefs(ctx).getInt("quality", 95).toFloat().coerceIn(80f, 100f)) }
+    var quality by remember { mutableFloatStateOf(prefs(ctx).getInt("quality_v2", 100).toFloat().coerceIn(80f, 100f)) }
     var scale by remember { mutableIntStateOf(prefs(ctx).getInt("scale", 100)) }
     var toGallery by remember { mutableStateOf(true) }
     val cs = MaterialTheme.colorScheme
@@ -95,7 +95,7 @@ fun ExportDialog(baseW: Int, baseH: Int, onDismiss: () -> Unit, onConfirm: (Expo
         },
         confirmButton = {
             Button(onClick = {
-                prefs(ctx).edit().putInt("format", format).putInt("quality", quality.toInt()).putInt("scale", scale).apply()
+                prefs(ctx).edit().putInt("format", format).putInt("quality_v2", quality.toInt()).putInt("scale", scale).apply()
                 onConfirm(ExportOptions(format, if (format == 1) 100 else quality.toInt(), scale), toGallery)
             }) { Text("Salva") }
         },
