@@ -120,9 +120,18 @@ class Segmenter private constructor(encoderPath: String, decoderPath: String) {
         }
     }
 
+    @Synchronized
+    private fun close() {
+        runCatching { encoder.close() }
+        runCatching { decoder.close() }
+        embedding = null; embeddedFor = null
+    }
+
     companion object {
         private const val TARGET = 1024
         @Volatile private var instance: Segmenter? = null
+
+        fun release() = synchronized(this) { instance?.close(); instance = null }
 
         fun get(ctx: Context): Segmenter = instance ?: synchronized(this) {
             instance ?: Segmenter(

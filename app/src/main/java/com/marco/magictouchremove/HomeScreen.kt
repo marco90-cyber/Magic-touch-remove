@@ -20,6 +20,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -39,12 +45,21 @@ val Panel = Color(0xFF1A201E)
 
 @Composable
 fun HomeScreen(model: ModelState, onDownload: () -> Unit, onPick: () -> Unit) {
+    var showInfo by remember { mutableStateOf(false) }
     Column(
         Modifier.fillMaxSize().background(Ink).padding(horizontal = 20.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Magic Touch Remove", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-        Text("Rimuovi oggetti dalle foto con l'IA", color = Color(0xFF8A9792), fontSize = 14.sp)
+        Box(Modifier.fillMaxWidth()) {
+            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Magic Touch Remove", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                Text("Rimuovi oggetti dalle foto con l'IA", color = Color(0xFF8A9792), fontSize = 14.sp)
+            }
+            IconButton(onClick = { showInfo = true }, modifier = Modifier.align(Alignment.CenterEnd)) {
+                Icon(Icons.Filled.Info, "Informazioni sull'app", tint = Mint)
+            }
+        }
+        if (showInfo) InfoDialog(model) { showInfo = false }
 
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {

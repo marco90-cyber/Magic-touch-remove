@@ -19,21 +19,30 @@ sealed interface ModelState {
 }
 
 /** Un modello ONNX da scaricare: nome file, dimensione attesa e indirizzi (il primo che risponde). */
-private class ModelFile(val name: String, val expected: Long, val minSize: Long, val urls: List<String>)
+private class ModelFile(
+    val name: String, val expected: Long, val minSize: Long, val urls: List<String>,
+    val title: String, val role: String, val version: String, val license: String
+)
+
+/** Dati mostrati nella schermata Informazioni. */
+class ModelInfo(val title: String, val role: String, val version: String, val license: String, val sizeBytes: Long, val present: Boolean)
 
 private const val REPO = "https://github.com/marco90-cyber/Magic-touch-remove/releases/download"
 
 private val LAMA = ModelFile(
     "lama_fp32.onnx", 208_044_816L, 150_000_000L,
-    listOf("https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx", "$REPO/model-v1/lama_fp32.onnx")
+    listOf("https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx", "$REPO/model-v1/lama_fp32.onnx"),
+    "LaMa (big-lama)", "Rimozione oggetti", "ONNX fp32 · release model-v1", "Apache-2.0"
 )
 private val SAM_ENCODER = ModelFile(
     "mobile_sam_image_encoder.onnx", 28_157_093L, 25_000_000L,
-    listOf("https://huggingface.co/Acly/MobileSAM/resolve/main/mobile_sam_image_encoder.onnx", "$REPO/sam-v1/mobile_sam_image_encoder.onnx")
+    listOf("https://huggingface.co/Acly/MobileSAM/resolve/main/mobile_sam_image_encoder.onnx", "$REPO/sam-v1/mobile_sam_image_encoder.onnx"),
+    "MobileSAM · encoder", "Selezione automatica", "ONNX · release sam-v1", "MIT"
 )
 private val SAM_DECODER = ModelFile(
     "sam_mask_decoder_multi.onnx", 16_496_559L, 14_000_000L,
-    listOf("https://huggingface.co/Acly/MobileSAM/resolve/main/sam_mask_decoder_multi.onnx", "$REPO/sam-v1/sam_mask_decoder_multi.onnx")
+    listOf("https://huggingface.co/Acly/MobileSAM/resolve/main/sam_mask_decoder_multi.onnx", "$REPO/sam-v1/sam_mask_decoder_multi.onnx"),
+    "MobileSAM · decoder", "Selezione automatica", "ONNX multi-maschera · release sam-v1", "MIT"
 )
 private val ALL = listOf(LAMA, SAM_ENCODER, SAM_DECODER)
 
@@ -60,6 +69,25 @@ object ModelManager {
     fun init(ctx: Context) {
         if (_state.value is ModelState.Downloading) return
         _state.value = if (allReady(ctx)) ModelState.Ready else ModelState.Missing
+    }
+
+    fun infos(ctx: Context): List<ModelInfo> = ALL.map {
+        val f = fileOf(ctx, it)
+        ModelInfo(it.title, it.role, it.version, it.license, if (f.exists()) f.length() else 0L, has(ctx, it))
+    }
+
+    /** Elimina tutti i modelli scaricati. Ritorna false se è in corso un download. */
+    fun deleteAll(ctx: Context): Boolean {
+        if (_state.value is ModelState.Downloading) return false
+        Inpainter.release()
+        Segmenter.release()
+        ALL.forEach {
+            val f = fileOf(ctx, it)
+            f.delete()
+            File(f.path + ".part").delete()
+        }
+        _state.value = ModelState.Missing
+        return true
     }
 
     /** Scarica solo i modelli che mancano. */

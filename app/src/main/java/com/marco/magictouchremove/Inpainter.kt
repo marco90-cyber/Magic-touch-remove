@@ -168,9 +168,13 @@ class Inpainter private constructor(modelPath: String) {
         return out
     }
 
+    private fun close() { runCatching { session.close() } }
+
     companion object {
         private const val SIZE = 512
         @Volatile private var instance: Inpainter? = null
+
+        fun release() = synchronized(this) { instance?.close(); instance = null }
 
         fun get(ctx: Context): Inpainter = instance ?: synchronized(this) {
             instance ?: Inpainter(ModelManager.file(ctx).absolutePath).also { instance = it }
