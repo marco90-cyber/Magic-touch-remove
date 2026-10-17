@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 enum class Tool { SELECT, BRUSH, LASSO, ERASER, RESTORE }
@@ -66,6 +67,10 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     private val undo = ArrayDeque<Snapshot>()
     private val redo = ArrayDeque<Snapshot>()
     private var source: Bitmap? = null
+    private var sourceUri: Uri? = null
+    /** Dimensioni della foto originale (prima del ridimensionamento di lavoro), per l'esportazione. */
+    var originalW by mutableIntStateOf(0); private set
+    var originalH by mutableIntStateOf(0); private set
     private var drawCanvas: Canvas? = null
     private var strokePaint: Paint? = null
     private var lastX = 0f
@@ -78,8 +83,12 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             busy = true
             try {
                 val bmp = withContext(Dispatchers.IO) { decode(uri) }
+                val dims = withContext(Dispatchers.IO) { runCatching { fullSize(uri, bmp.width >= bmp.height) }.getOrNull() }
+                originalW = dims?.first ?: bmp.width
+                originalH = dims?.second ?: bmp.height
                 undo.clear(); redo.clear()
                 source = bmp
+                sourceUri = uri
                 image = bmp
                 mask = Bitmap.createBitmap(bmp.width, bmp.height, Bitmap.Config.ALPHA_8)
                 hasMask = false
@@ -93,6 +102,20 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 busy = false
             }
         }
+    }
+
+    /** Dimensioni reali della foto (con l'orientamento giusto), senza decodificarla. */
+    private fun fullSize(uri: Uri, landscape: Boolean): Pair<Int, Int> {
+        var w = 0; var h = 0
+        val src = ImageDecoder.createSource(getApplication<Application>().contentResolver, uri)
+        runCatching {
+            ImageDecoder.decodeBitmap(src) { dec, info, _ ->
+                w = info.size.width; h = info.size.height
+                dec.setTargetSize(1, 1)
+            }
+        }
+        if (w == 0) error("dimensioni non lette")
+        return if ((w >= h) == landscape) w to h else h to w
     }
 
     private fun decode(uri: Uri): Bitmap {
@@ -112,7 +135,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun close() {
-        image = null; mask = null; source = null
+        image = null; mask = null; source = null; sourceUri = null
         undo.clear(); redo.clear()
         hasMask = false
         refreshHistoryFlags()
@@ -335,28 +358,154 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---- export ----
-    /** @param onSaved eseguita (sul thread principale) solo se il salvataggio è riuscito. */
-    fun saveToGallery(onSaved: (() -> Unit)? = null) {
+    /** Foto alla risoluzione scelta: fuori dalle zone modificate usa i pixel della foto originale a piena risoluzione. */
+    private fun renderFull(im: Bitmap, scalePct: Int): Bitmap {
+        val src = source
+        val uri = sourceUri
+        var base: Bitmap = im
+        if (src != null && uri != null && originalW > im.width) {
+            val full = runCatching { decodeFull(uri) }.getOrNull()
+            if (full != null && full.width.toLong() * full.height <= 60_000_000L &&
+                kotlin.math.abs(full.width.toFloat() / full.height - im.width.toFloat() / im.height) < 0.01f
+            ) {
+                base = runCatching { compose(full, im, src) }.getOrDefault(im)
+            }
+        }
+        if (scalePct >= 100) return base
+        val w = (base.width * scalePct / 100).coerceAtLeast(1)
+        val h = (base.height * scalePct / 100).coerceAtLeast(1)
+        return Bitmap.createScaledBitmap(base, w, h, true)
+    }
+
+    private fun decodeFull(uri: Uri): Bitmap {
+        val src = ImageDecoder.createSource(getApplication<Application>().contentResolver, uri)
+        return ImageDecoder.decodeBitmap(src) { dec, _, _ ->
+            dec.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            dec.isMutableRequired = true
+            dec.setTargetColorSpace(android.graphics.ColorSpace.get(android.graphics.ColorSpace.Named.SRGB))
+        }
+    }
+
+    /** Rimette sulla foto originale ([full]) solo le zone che l'utente ha modificato in [im] (rispetto a [src]). */
+    private fun compose(full: Bitmap, im: Bitmap, src: Bitmap): Bitmap {
+        val ww = im.width; val hh = im.height
+        val W = full.width; val H = full.height
+        val p1 = IntArray(ww * hh); val p2 = IntArray(ww * hh)
+        im.getPixels(p1, 0, ww, 0, 0, ww, hh)
+        src.getPixels(p2, 0, ww, 0, 0, ww, hh)
+        var m = FloatArray(ww * hh)
+        var any = false
+        for (i in m.indices) {
+            val a = p1[i]; val b = p2[i]
+            val d = max(max(kotlin.math.abs(((a shr 16) and 255) - ((b shr 16) and 255)), kotlin.math.abs(((a shr 8) and 255) - ((b shr 8) and 255))),
+                kotlin.math.abs((a and 255) - (b and 255)))
+            if (d > 2) { m[i] = 1f; any = true }
+        }
+        if (!any) return full
+        // sfumatura del bordo: due passaggi di media (orizzontale + verticale)
+        val r = 4
+        val tmp = FloatArray(ww * hh)
+        for (y in 0 until hh) {
+            var acc = 0f
+            val row = y * ww
+            for (x in -r..r) acc += m[row + x.coerceIn(0, ww - 1)]
+            for (x in 0 until ww) {
+                tmp[row + x] = acc / (2 * r + 1)
+                acc += m[row + (x + r + 1).coerceIn(0, ww - 1)] - m[row + (x - r).coerceIn(0, ww - 1)]
+            }
+        }
+        for (x in 0 until ww) {
+            var acc = 0f
+            for (y in -r..r) acc += tmp[y.coerceIn(0, hh - 1) * ww + x]
+            for (y in 0 until hh) {
+                m[y * ww + x] = min(1f, acc / (2 * r + 1) * 2.5f)
+                acc += tmp[(y + r + 1).coerceIn(0, hh - 1) * ww + x] - tmp[(y - r).coerceIn(0, hh - 1) * ww + x]
+            }
+        }
+        val edited = Bitmap.createScaledBitmap(im, W, H, true)
+        val xi0 = IntArray(W); val xi1 = IntArray(W); val xf = FloatArray(W)
+        for (x in 0 until W) {
+            val fx = ((x + 0.5f) * ww / W - 0.5f).coerceIn(0f, ww - 1f)
+            xi0[x] = fx.toInt(); xi1[x] = min(ww - 1, xi0[x] + 1); xf[x] = fx - xi0[x]
+        }
+        val a = FloatArray(W)
+        val fr = IntArray(W); val er = IntArray(W)
+        for (y in 0 until H) {
+            val fy = ((y + 0.5f) * hh / H - 0.5f).coerceIn(0f, hh - 1f)
+            val y0 = fy.toInt(); val y1 = min(hh - 1, y0 + 1); val ay = fy - y0
+            var rowAny = false
+            for (x in 0 until W) {
+                val t = m[y0 * ww + xi0[x]] * (1 - xf[x]) + m[y0 * ww + xi1[x]] * xf[x]
+                val b = m[y1 * ww + xi0[x]] * (1 - xf[x]) + m[y1 * ww + xi1[x]] * xf[x]
+                val v = t * (1 - ay) + b * ay
+                a[x] = v
+                if (v > 0.001f) rowAny = true
+            }
+            if (!rowAny) continue
+            full.getPixels(fr, 0, W, 0, y, W, 1)
+            edited.getPixels(er, 0, W, 0, y, W, 1)
+            for (x in 0 until W) {
+                val k = a[x]
+                if (k <= 0.001f) continue
+                val f = fr[x]; val e = er[x]
+                val rr = (((e shr 16) and 255) * k + ((f shr 16) and 255) * (1 - k)).toInt()
+                val gg = (((e shr 8) and 255) * k + ((f shr 8) and 255) * (1 - k)).toInt()
+                val bb = ((e and 255) * k + (f and 255) * (1 - k)).toInt()
+                fr[x] = (255 shl 24) or (rr shl 16) or (gg shl 8) or bb
+            }
+            full.setPixels(fr, 0, W, 0, y, W, 1)
+        }
+        return full
+    }
+
+    @Suppress("DEPRECATION")
+    private fun write(bmp: Bitmap, o: ExportOptions, out: java.io.OutputStream) {
+        val fmt = when (o.format) {
+            1 -> Bitmap.CompressFormat.PNG
+            2 -> if (android.os.Build.VERSION.SDK_INT >= 30)
+                (if (o.quality >= 100) Bitmap.CompressFormat.WEBP_LOSSLESS else Bitmap.CompressFormat.WEBP_LOSSY)
+            else Bitmap.CompressFormat.WEBP
+            else -> Bitmap.CompressFormat.JPEG
+        }
+        if (!bmp.compress(fmt, o.quality, out)) error("compressione non riuscita")
+    }
+
+    /**
+     * Salva la foto con le opzioni scelte. [dest] = file scelto dall'utente; null = galleria (Immagini/MagicTouchRemove).
+     * @param onSaved eseguita (sul thread principale) solo se il salvataggio è riuscito.
+     */
+    fun export(o: ExportOptions, dest: Uri?, onSaved: (() -> Unit)? = null) {
         val im = image ?: return
+        if (busy) return
         val ctx = getApplication<Application>()
+        busy = true
+        busyText = "Salvataggio…"
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val values = ContentValues().apply {
-                    put(MediaStore.Images.Media.DISPLAY_NAME, "MagicTouch_${System.currentTimeMillis()}.jpg")
-                    put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                    put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MagicTouchRemove")
-                    put(MediaStore.Images.Media.IS_PENDING, 1)
+                val bmp = renderFull(im, o.scale)
+                if (dest != null) {
+                    ctx.contentResolver.openOutputStream(dest, "wt")!!.use { write(bmp, o, it) }
+                    message = "Foto salvata (${bmp.width}×${bmp.height})"
+                } else {
+                    val values = ContentValues().apply {
+                        put(MediaStore.Images.Media.DISPLAY_NAME, "MagicTouch_${System.currentTimeMillis()}.${o.ext}")
+                        put(MediaStore.Images.Media.MIME_TYPE, o.mime)
+                        put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MagicTouchRemove")
+                        put(MediaStore.Images.Media.IS_PENDING, 1)
+                    }
+                    val r = ctx.contentResolver
+                    val uri = r.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: error("MediaStore")
+                    r.openOutputStream(uri)!!.use { write(bmp, o, it) }
+                    values.clear()
+                    values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                    r.update(uri, values, null, null)
+                    message = "Salvata in Immagini/MagicTouchRemove (${bmp.width}×${bmp.height})"
                 }
-                val r = ctx.contentResolver
-                val uri = r.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: error("MediaStore")
-                r.openOutputStream(uri)!!.use { im.compress(Bitmap.CompressFormat.JPEG, 95, it) }
-                values.clear()
-                values.put(MediaStore.Images.Media.IS_PENDING, 0)
-                r.update(uri, values, null, null)
-                message = "Salvata in Immagini/MagicTouchRemove"
                 if (onSaved != null) withContext(Dispatchers.Main) { onSaved() }
-            } catch (e: Exception) {
-                message = "Errore salvataggio: ${e.message}"
+            } catch (e: Throwable) {
+                message = "Errore salvataggio: ${e.message ?: e.javaClass.simpleName}"
+            } finally {
+                busy = false
             }
         }
     }
@@ -369,12 +518,13 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 val uri = withContext(Dispatchers.IO) {
                     val dir = File(ctx.cacheDir, "shared").apply { mkdirs() }
                     val f = File(dir, "MagicTouch_${System.currentTimeMillis()}.jpg")
-                    f.outputStream().use { im.compress(Bitmap.CompressFormat.JPEG, 95, it) }
+                    val bmp = renderFull(im, 100)
+                    f.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 95, it) }
                     FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", f)
                 }
                 onUri(uri)
-            } catch (e: Exception) {
-                message = "Errore condivisione: ${e.message}"
+            } catch (e: Throwable) {
+                message = "Errore condivisione: ${e.message ?: e.javaClass.simpleName}"
             }
         }
     }

@@ -2,6 +2,7 @@ package com.marco.magictouchremove
 
 import android.graphics.Color as AColor
 import android.os.Bundle
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -71,6 +72,16 @@ private fun App() {
     val vm: EditorViewModel = viewModel()
     val model by ModelManager.state.collectAsStateWithLifecycle()
     var confirmExit by remember { mutableStateOf(false) }
+    var exportClose by remember { mutableStateOf<Boolean?>(null) }   // null = finestra chiusa; true = poi esci dall'editor
+    var pending by remember { mutableStateOf<Pair<ExportOptions, Boolean>?>(null) }
+    val onDest = { uri: Uri? ->
+        val p = pending
+        pending = null
+        if (uri != null && p != null) vm.export(p.first, uri, if (p.second) ({ vm.close() }) else null)
+    }
+    val saveJpg = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/jpeg"), onDest)
+    val savePng = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png"), onDest)
+    val saveWebp = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/webp"), onDest)
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) vm.load(uri)
@@ -95,7 +106,7 @@ private fun App() {
 
     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(if (inEditor) Color.Black else MaterialTheme.colorScheme.background).systemBarsPadding()) {
         if (inEditor) {
-            MagicTheme(dark = true) { EditorScreen(vm, onBack = { if (vm.hasChanges) confirmExit = true else vm.close() }) }
+            MagicTheme(dark = true) { EditorScreen(vm, onBack = { if (vm.hasChanges) confirmExit = true else vm.close() }, onSave = { exportClose = false }) }
         } else {
             HomeScreen(
                 model = model,
@@ -106,13 +117,30 @@ private fun App() {
         }
     }
 
+    exportClose?.let { closeAfter ->
+        ExportDialog(
+            baseW = if (vm.originalW > 0) vm.originalW else vm.image?.width ?: 1,
+            baseH = if (vm.originalH > 0) vm.originalH else vm.image?.height ?: 1,
+            onDismiss = { exportClose = null },
+            onConfirm = { o, toGallery ->
+                exportClose = null
+                if (toGallery) vm.export(o, null, if (closeAfter) ({ vm.close() }) else null)
+                else {
+                    pending = o to closeAfter
+                    val name = "MagicTouch_${System.currentTimeMillis()}.${o.ext}"
+                    when (o.format) { 1 -> savePng.launch(name); 2 -> saveWebp.launch(name); else -> saveJpg.launch(name) }
+                }
+            }
+        )
+    }
+
     if (confirmExit) {
         AlertDialog(
             onDismissRequest = { confirmExit = false },
             icon = { Icon(Icons.Filled.Save, null) },
             title = { Text("Salvare la foto?") },
             text = { Text("Hai modificato la foto. Vuoi salvarla nella galleria prima di uscire?") },
-            confirmButton = { Button(onClick = { confirmExit = false; vm.saveToGallery { vm.close() } }) { Text("Salva ed esci") } },
+            confirmButton = { Button(onClick = { confirmExit = false; exportClose = true }) { Text("Salva ed esci") } },
             dismissButton = {
                 Row {
                     TextButton(onClick = { confirmExit = false }) { Text("Annulla") }

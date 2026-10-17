@@ -89,7 +89,7 @@ import androidx.compose.material.icons.filled.TouchApp
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
+fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
     val ctx = LocalContext.current
     val density = LocalDensity.current.density
 
@@ -132,7 +132,7 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit) {
                 Box {
                     IconButton(onClick = { showMenu = true }) { Icon(Icons.Filled.IosShare, "Esporta") }
                     DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                        DropdownMenuItem(text = { Text("Salva in galleria") }, leadingIcon = { Icon(Icons.Filled.Save, null) }, onClick = { showMenu = false; vm.saveToGallery() })
+                        DropdownMenuItem(text = { Text("Salva in galleria") }, leadingIcon = { Icon(Icons.Filled.Save, null) }, onClick = { showMenu = false; onSave() })
                         DropdownMenuItem(text = { Text("Condividi") }, leadingIcon = { Icon(Icons.Filled.IosShare, null) }, onClick = {
                             showMenu = false
                             vm.share { uri ->
