@@ -109,7 +109,12 @@ jobs:
           KEYSTORE_PASSWORD: MagicTouchRemove2026
           KEY_ALIAS: magictouch
           KEY_PASSWORD: MagicTouchRemove2026
-        run: gradle :app:assembleRelease -Pvc=${{ github.run_number }} --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          gradle :app:assembleRelease -Pvc=${{ github.run_number }} --no-daemon --stacktrace 2>&1 | tee build.log || {
+            grep -E "^e: " build.log | head -20 | while IFS= read -r l; do echo "::error::${l}"; done
+            exit 1
+          }
       - name: Rename APK
         run: cp app/build/outputs/apk/release/app-release.apk MagicTouchRemove-v1.${{ github.run_number }}.apk
       - uses: actions/upload-artifact@v4
