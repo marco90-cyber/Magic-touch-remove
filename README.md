@@ -19,3 +19,10 @@ sulla foto originale sostituendo solo i pixel selezionati. Il modello (~200 MB) 
 
 ## Build
 Ogni push su `main` compila l'APK con GitHub Actions e lo pubblica nelle **Releases**.
+
+## Aggiornare i modelli
+L'app legge `models.json` (nella radice del repository) all'avvio e dalle *Informazioni*: se un modello ha una `version` più alta di quella installata
+propone «Aggiorna modelli» (verifica SHA-256, ignora aggiornamenti con `minApp` superiore alla versione dell'app).
+Per pubblicare un nuovo modello: carica il file in una nuova Release (es. `model-v2`), poi in `models.json` aumenta `version`,
+aggiorna `urls`, `size`, `sha256` e (facoltativo) `notes`. Se il nuovo modello richiede modifiche al codice, imposta `minApp`
+sul numero di versione dell'app che lo supporta.

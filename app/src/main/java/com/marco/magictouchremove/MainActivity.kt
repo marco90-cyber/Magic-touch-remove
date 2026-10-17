@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(AColor.TRANSPARENT)
         )
         ModelManager.init(applicationContext)
+        ModelManager.checkUpdates(applicationContext)   // controlla se ci sono nuove versioni dei modelli
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(primary = Mint, background = Ink, surface = Panel)) {
                 App()
@@ -70,6 +71,7 @@ private fun App() {
             HomeScreen(
                 model = model,
                 onDownload = { ModelManager.download(ctx) },
+                onUpdate = { ModelManager.update(ctx) },
                 onPick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
             )
         }

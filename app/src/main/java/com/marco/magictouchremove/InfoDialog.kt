@@ -27,6 +27,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -65,7 +67,12 @@ fun InfoDialog(model: ModelState, onDismiss: () -> Unit) {
     val version = remember {
         runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "?"
     }
-    val infos = remember(model) { ModelManager.infos(ctx) }
+    val remote by ModelManager.remote.collectAsStateWithLifecycle()
+    val checking by ModelManager.checking.collectAsStateWithLifecycle()
+    val checkFailed by ModelManager.checkFailed.collectAsStateWithLifecycle()
+    val updateError by ModelManager.updateError.collectAsStateWithLifecycle()
+    val infos = remember(model, remote) { ModelManager.infos(ctx) }
+    val hasUpdate = infos.any { it.update }
     val total = infos.sumOf { it.sizeBytes }
     var confirmDelete by remember { mutableStateOf(false) }
 
@@ -133,6 +140,11 @@ fun InfoDialog(model: ModelState, onDismiss: () -> Unit) {
                             Text("${m.role} · ${m.version}", color = Muted, fontSize = 12.sp)
                             Text("Licenza ${m.license} · ${fmtSize(m.sizeBytes)}", color = Muted, fontSize = 12.sp)
                             Text("File: ${m.fileName}", color = Muted, fontSize = 12.sp)
+                            if (m.present) Text("Versione installata: v${m.installed}", color = Muted, fontSize = 12.sp)
+                            if (m.update) Text(
+                                "Aggiornamento disponibile: v${m.latest}" + (m.notes?.let { " · $it" } ?: ""),
+                                color = Mint, fontSize = 12.sp, fontWeight = FontWeight.SemiBold
+                            )
                             Text(
                                 "Scaricato da: ${m.source}", color = Mint, fontSize = 12.sp,
                                 modifier = Modifier.clickable { uri.openUri(m.sourceUrl) }
@@ -147,6 +159,40 @@ fun InfoDialog(model: ModelState, onDismiss: () -> Unit) {
                         color = Muted, fontSize = 12.sp
                     )
                     InfoRow("Spazio occupato", fmtSize(total))
+
+                    Section("Aggiornamenti dei modelli")
+                    Text(
+                        when {
+                            model is ModelState.Downloading -> "Download in corso…"
+                            hasUpdate -> "Sono disponibili nuove versioni dei modelli."
+                            checkFailed -> "Controllo non riuscito (sei offline?)."
+                            remote.isNotEmpty() -> "I modelli sono aggiornati."
+                            else -> "Controllo in corso…"
+                        },
+                        color = if (hasUpdate) Mint else Muted, fontSize = 13.sp
+                    )
+                    updateError?.let { Text("Errore aggiornamento: $it", color = Color(0xFFFF8A80), fontSize = 12.sp) }
+                    if (model is ModelState.Downloading) {
+                        LinearProgressIndicator(progress = { model.progress }, color = Mint, modifier = Modifier.fillMaxWidth())
+                    }
+                    if (hasUpdate && model !is ModelState.Downloading) {
+                        Button(
+                            onClick = { ModelManager.update(ctx) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Color.Black),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Aggiorna modelli", fontWeight = FontWeight.Bold) }
+                    }
+                    OutlinedButton(
+                        onClick = { ModelManager.checkUpdates(ctx) },
+                        enabled = !checking && model !is ModelState.Downloading,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (checking) "Controllo in corso…" else "Controlla aggiornamenti", color = Color.White) }
+                    Text(
+                        "L'app confronta le versioni installate con l'elenco models.json del repository GitHub. " +
+                            "Gli aggiornamenti sono verificati con SHA-256 e proposti solo se compatibili con questa versione dell'app. " +
+                            "Non si aggiorna mai nulla senza il tuo consenso.",
+                        color = Muted, fontSize = 12.sp
+                    )
                     Spacer(Modifier.height(4.dp))
                     OutlinedButton(
                         onClick = { confirmDelete = true },

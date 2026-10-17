@@ -34,6 +34,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,7 +49,10 @@ val Ink = Color(0xFF0B0F0E)
 val Panel = Color(0xFF1A201E)
 
 @Composable
-fun HomeScreen(model: ModelState, onDownload: () -> Unit, onPick: () -> Unit) {
+fun HomeScreen(model: ModelState, onDownload: () -> Unit, onUpdate: () -> Unit, onPick: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val remote by ModelManager.remote.collectAsStateWithLifecycle()
+    val hasUpdate = remember(remote, model) { ModelManager.updateAvailable(ctx) }
     var showInfo by remember { mutableStateOf(false) }
     var showNeedModels by remember { mutableStateOf(false) }
     val open = { if (model is ModelState.Ready) onPick() else showNeedModels = true }
@@ -62,7 +66,10 @@ fun HomeScreen(model: ModelState, onDownload: () -> Unit, onPick: () -> Unit) {
                 Text("Rimuovi oggetti dalle foto con l'IA", color = Color(0xFF8A9792), fontSize = 14.sp)
             }
             IconButton(onClick = { showInfo = true }, modifier = Modifier.align(Alignment.CenterEnd)) {
-                Icon(Icons.Filled.Info, "Informazioni sull'app", tint = Mint)
+                Box {
+                    Icon(Icons.Filled.Info, "Informazioni sull'app", tint = Mint)
+                    if (hasUpdate) Box(Modifier.size(9.dp).align(Alignment.TopEnd).clip(CircleShape).background(Color(0xFFFF5252)))
+                }
             }
         }
         if (showInfo) InfoDialog(model) { showInfo = false }
@@ -116,6 +123,10 @@ fun HomeScreen(model: ModelState, onDownload: () -> Unit, onPick: () -> Unit) {
                     is ModelState.Ready -> {
                         Text("Modelli IA pronti", color = Mint, fontWeight = FontWeight.SemiBold)
                         Text("Rimozione (LaMa) e selezione automatica (MobileSAM) funzionano offline.", color = Color(0xFF8A9792), fontSize = 13.sp)
+                        if (hasUpdate) {
+                            Text("È disponibile un aggiornamento dei modelli.", color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Button(onClick = onUpdate, modifier = Modifier.fillMaxWidth()) { Text("Aggiorna modelli") }
+                        }
                     }
                     is ModelState.Downloading -> {
                         Text("Download modelli IA… ${(model.progress * 100).toInt()}%", color = Color.White, fontWeight = FontWeight.SemiBold)
