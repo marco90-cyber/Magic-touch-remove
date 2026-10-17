@@ -14,7 +14,22 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -78,12 +93,27 @@ private fun App() {
     }
 
     if (confirmExit) {
-        AlertDialog(
-            onDismissRequest = { confirmExit = false },
-            title = { Text("Chiudere la foto?") },
-            text = { Text("Le modifiche non salvate andranno perse.") },
-            confirmButton = { TextButton(onClick = { confirmExit = false; vm.close() }) { Text("Chiudi") } },
-            dismissButton = { TextButton(onClick = { confirmExit = false }) { Text("Annulla") } }
-        )
+        Dialog(onDismissRequest = { confirmExit = false }) {
+            Surface(shape = RoundedCornerShape(24.dp), color = Panel, border = BorderStroke(1.dp, Color(0xFF26302D))) {
+                Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Salvare la foto?", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Hai modificato la foto. Vuoi salvarla nella galleria prima di uscire?",
+                        color = Color(0xFFB8C2BE), fontSize = 14.sp, textAlign = TextAlign.Center
+                    )
+                    Button(
+                        onClick = { confirmExit = false; vm.saveToGallery { vm.close() } },
+                        colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Color.Black),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Salva ed esci", fontWeight = FontWeight.Bold) }
+                    TextButton(onClick = { confirmExit = false; vm.close() }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Esci senza salvare", color = Color(0xFFFF8A80))
+                    }
+                    TextButton(onClick = { confirmExit = false }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Annulla", color = Color.White)
+                    }
+                }
+            }
+        }
     }
 }

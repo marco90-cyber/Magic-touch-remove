@@ -335,7 +335,8 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---- export ----
-    fun saveToGallery() {
+    /** @param onSaved eseguita (sul thread principale) solo se il salvataggio è riuscito. */
+    fun saveToGallery(onSaved: (() -> Unit)? = null) {
         val im = image ?: return
         val ctx = getApplication<Application>()
         viewModelScope.launch(Dispatchers.IO) {
@@ -353,6 +354,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 values.put(MediaStore.Images.Media.IS_PENDING, 0)
                 r.update(uri, values, null, null)
                 message = "Salvata in Immagini/MagicTouchRemove"
+                if (onSaved != null) withContext(Dispatchers.Main) { onSaved() }
             } catch (e: Exception) {
                 message = "Errore salvataggio: ${e.message}"
             }
