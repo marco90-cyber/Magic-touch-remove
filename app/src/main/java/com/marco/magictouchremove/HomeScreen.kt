@@ -17,6 +17,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.window.Dialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -46,6 +50,8 @@ val Panel = Color(0xFF1A201E)
 @Composable
 fun HomeScreen(model: ModelState, onDownload: () -> Unit, onPick: () -> Unit) {
     var showInfo by remember { mutableStateOf(false) }
+    var showNeedModels by remember { mutableStateOf(false) }
+    val open = { if (model is ModelState.Ready) onPick() else showNeedModels = true }
     Column(
         Modifier.fillMaxSize().background(Ink).padding(horizontal = 20.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -60,12 +66,36 @@ fun HomeScreen(model: ModelState, onDownload: () -> Unit, onPick: () -> Unit) {
             }
         }
         if (showInfo) InfoDialog(model) { showInfo = false }
+        if (showNeedModels) {
+            val downloading = model is ModelState.Downloading
+            Dialog(onDismissRequest = { showNeedModels = false }) {
+                Surface(shape = RoundedCornerShape(24.dp), color = Panel, border = BorderStroke(1.dp, Color(0xFF26302D))) {
+                    Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            if (downloading) "Download dei modelli IA in corso. Attendi il completamento prima di aprire la galleria."
+                            else "Prima di andare avanti è necessario scaricare i modelli IA.",
+                            color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center
+                        )
+                        if (!downloading) {
+                            Button(
+                                onClick = { showNeedModels = false; onDownload() },
+                                colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Color.Black),
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("Scarica", fontWeight = FontWeight.Bold) }
+                        }
+                        TextButton(onClick = { showNeedModels = false }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Chiudi", color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
 
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
                     Modifier.size(150.dp).clip(CircleShape).background(Panel)
-                        .clickable(onClick = onPick),
+                        .clickable(onClick = { open() }),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Filled.AddPhotoAlternate, null, tint = Mint, modifier = Modifier.size(56.dp))
