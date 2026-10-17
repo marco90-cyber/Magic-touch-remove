@@ -73,6 +73,7 @@ fun InfoDialog(model: ModelState, onDismiss: () -> Unit) {
     val updateError by ModelManager.updateError.collectAsStateWithLifecycle()
     val infos = remember(model, remote) { ModelManager.infos(ctx) }
     val hasUpdate = infos.any { it.update }
+    val appState by AppUpdater.state.collectAsStateWithLifecycle()
     val total = infos.sumOf { it.sizeBytes }
     var confirmDelete by remember { mutableStateOf(false) }
 
@@ -129,6 +130,36 @@ fun InfoDialog(model: ModelState, onDismiss: () -> Unit) {
                     InfoRow("Interfaccia", "Jetpack Compose (Material 3)")
                     InfoRow("Motore IA", "ONNX Runtime 1.20.0 (sul dispositivo)")
                     InfoRow("Richiede", "Android 10 o superiore")
+
+                    Section("Aggiornamenti dell'app")
+                    Text(
+                        when (val a = appState) {
+                            is UpdateState.Checking -> "Controllo in corso…"
+                            is UpdateState.Available -> "Nuova versione disponibile: ${a.release.name}"
+                            is UpdateState.Downloading -> "Download della versione ${a.release.name}… ${(a.progress * 100).toInt()}%"
+                            is UpdateState.Ready -> "Versione ${a.release.name} scaricata, pronta da installare."
+                            is UpdateState.UpToDate -> "L'app è aggiornata (versione $version)."
+                            is UpdateState.Error -> a.message
+                            else -> "Versione installata: $version"
+                        },
+                        color = if (appState is UpdateState.Available || appState is UpdateState.Ready) Mint else Muted, fontSize = 13.sp
+                    )
+                    if (appState is UpdateState.Available || appState is UpdateState.Ready) {
+                        Button(
+                            onClick = {
+                                AppUpdater.clearPostponed()
+                                if (appState is UpdateState.Ready) AppUpdater.install(ctx) else AppUpdater.download(ctx)
+                                onDismiss()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Color.Black),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(if (appState is UpdateState.Ready) "Installa" else "Aggiorna l'app", fontWeight = FontWeight.Bold) }
+                    }
+                    OutlinedButton(
+                        onClick = { AppUpdater.check(ctx) },
+                        enabled = appState !is UpdateState.Checking && appState !is UpdateState.Downloading,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (appState is UpdateState.Checking) "Controllo in corso…" else "Controlla aggiornamenti dell'app", color = Color.White) }
 
                     Section("Modelli IA scaricati")
                     infos.forEach { m ->

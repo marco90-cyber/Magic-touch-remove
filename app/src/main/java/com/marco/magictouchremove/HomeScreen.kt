@@ -52,7 +52,10 @@ val Panel = Color(0xFF1A201E)
 fun HomeScreen(model: ModelState, onDownload: () -> Unit, onUpdate: () -> Unit, onPick: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val remote by ModelManager.remote.collectAsStateWithLifecycle()
-    val hasUpdate = remember(remote, model) { ModelManager.updateAvailable(ctx) }
+    val modelUpdate = remember(remote, model) { ModelManager.updateAvailable(ctx) }
+    val appUpd by AppUpdater.state.collectAsStateWithLifecycle()
+    val hasUpdate = modelUpdate || appUpd is UpdateState.Available || appUpd is UpdateState.Ready
+    androidx.compose.runtime.LaunchedEffect(Unit) { AppUpdater.checkOnLaunch(ctx) }
     var showInfo by remember { mutableStateOf(false) }
     var showNeedModels by remember { mutableStateOf(false) }
     val open = { if (model is ModelState.Ready) onPick() else showNeedModels = true }
@@ -73,6 +76,7 @@ fun HomeScreen(model: ModelState, onDownload: () -> Unit, onUpdate: () -> Unit, 
             }
         }
         if (showInfo) InfoDialog(model) { showInfo = false }
+        AppUpdateDialog()
         if (showNeedModels) {
             val downloading = model is ModelState.Downloading
             Dialog(onDismissRequest = { showNeedModels = false }) {
@@ -123,7 +127,7 @@ fun HomeScreen(model: ModelState, onDownload: () -> Unit, onUpdate: () -> Unit, 
                     is ModelState.Ready -> {
                         Text("Modelli IA pronti", color = Mint, fontWeight = FontWeight.SemiBold)
                         Text("Rimozione (LaMa) e selezione automatica (MobileSAM) funzionano offline.", color = Color(0xFF8A9792), fontSize = 13.sp)
-                        if (hasUpdate) {
+                        if (modelUpdate) {
                             Text("È disponibile un aggiornamento dei modelli.", color = Color.White, fontWeight = FontWeight.SemiBold)
                             Button(onClick = onUpdate, modifier = Modifier.fillMaxWidth()) { Text("Aggiorna modelli") }
                         }

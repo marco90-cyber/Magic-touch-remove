@@ -16,11 +16,23 @@ android {
         ndk { abiFilters += listOf("arm64-v8a") }
     }
 
+    // Chiave di firma fissa (segreto GitHub KEYSTORE_BASE64): serve perché Android accetti gli aggiornamenti
+    // sopra l'app già installata. Senza chiave (build locale/fork) si usa quella di debug.
+    val releaseKeystore: String? = System.getenv("KEYSTORE_PATH")
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false
-            // firmato con la chiave di debug: installabile direttamente sul telefono
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (releaseKeystore != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }
     buildFeatures { compose = true }

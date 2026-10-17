@@ -70,7 +70,24 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.9
+      - name: Prepare signing key
+        id: sign
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Segreto KEYSTORE_BASE64 mancante: APK con chiave di debug, release NON pubblicata"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Build release APK
+        env:
+          KEYSTORE_PASSWORD: MagicTouchRemove2026
+          KEY_ALIAS: magictouch
+          KEY_PASSWORD: MagicTouchRemove2026
         run: gradle :app:assembleRelease -Pvc=${{ github.run_number }} --no-daemon --stacktrace
       - name: Rename APK
         run: cp app/build/outputs/apk/release/app-release.apk MagicTouchRemove-v1.${{ github.run_number }}.apk
@@ -79,9 +96,13 @@ jobs:
           name: MagicTouchRemove-apk
           path: MagicTouchRemove-v1.${{ github.run_number }}.apk
       - name: Publish GitHub Release
+        if: steps.sign.outputs.signed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
+          NOTES=$(printf '%s' "$COMMIT_MSG" | head -n 1)
+          [ -z "$NOTES" ] && NOTES="Build automatica"
           gh release create "v1.${{ github.run_number }}" "MagicTouchRemove-v1.${{ github.run_number }}.apk" \
             --target "${{ github.sha }}" --title "Magic Touch Remove v1.${{ github.run_number }}" \
-            --notes "Build automatica del commit ${{ github.sha }}"
+            --notes "$NOTES"

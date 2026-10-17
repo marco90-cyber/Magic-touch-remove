@@ -26,3 +26,11 @@ propone «Aggiorna modelli» (verifica SHA-256, ignora aggiornamenti con `minApp
 Per pubblicare un nuovo modello: carica il file in una nuova Release (es. `model-v2`), poi in `models.json` aumenta `version`,
 aggiorna `urls`, `size`, `sha256` e (facoltativo) `notes`. Se il nuovo modello richiede modifiche al codice, imposta `minApp`
 sul numero di versione dell'app che lo supporta.
+
+## Aggiornamenti dell'app e firma
+L'app controlla all'avvio l'ultima Release di GitHub e, se c'è una versione più nuova, mostra «Nuova versione disponibile» con **Aggiorna** / **Più tardi**.
+L'APK si scarica, poi Android chiede conferma e lo installa sopra quello esistente (modelli e impostazioni restano).
+
+Perché funzioni **tutte le build devono essere firmate con la stessa chiave**: la chiave sta nel segreto GitHub `KEYSTORE_BASE64`
+(Settings → Secrets and variables → Actions). Senza il segreto la build parte comunque ma **non pubblica la Release**.
+Chi copia il progetto (fork) usa la propria chiave e ottiene un'app separata.
