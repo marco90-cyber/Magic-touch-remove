@@ -26,7 +26,7 @@ abstract class Inpainter {
     protected abstract fun close()
 
     /** @param mask bitmap ALPHA_8 della stessa dimensione di [image]. Ritorna null se la maschera è vuota. */
-    fun inpaint(image: Bitmap, mask: Bitmap, expand: Int): Bitmap? {
+    fun inpaint(image: Bitmap, mask: Bitmap, expand: Int, feather: Int = 0): Bitmap? {
         val w = image.width
         val h = image.height
         val mpx = IntArray(w * h)
@@ -85,7 +85,8 @@ abstract class Inpainter {
         outBmp512.setPixels(outPx, 0, n, 0, 0, n, n)
         val outBmp = if (cw == n && ch == n) outBmp512 else Bitmap.createScaledBitmap(outBmp512, cw, ch, true)
 
-        val aPx = IntArray(plane) { if (m512[it]) 0xFFFFFFFF.toInt() else 0 }
+        val soft = softAlpha(m512, n, feather)
+        val aPx = IntArray(plane) { ((soft[it] * 255f).toInt() shl 24) or 0xFFFFFF }
         val aBmp512 = Bitmap.createBitmap(n, n, Bitmap.Config.ARGB_8888)
         aBmp512.setPixels(aPx, 0, n, 0, 0, n, n)
         val aBmp = if (cw == n && ch == n) aBmp512 else Bitmap.createScaledBitmap(aBmp512, cw, ch, true)
@@ -118,6 +119,33 @@ abstract class Inpainter {
             for (xx in x0 until x1) if ((mpx[row + xx] ushr 24) > 127) return true
         }
         return false
+    }
+
+    /** Opacità del riempimento: 1 dentro la maschera, con bordo che sfuma verso l'esterno per [r] pixel. */
+    private fun softAlpha(m: BooleanArray, n: Int, r: Int): FloatArray {
+        val a = FloatArray(n * n) { if (m[it]) 1f else 0f }
+        if (r <= 0) return a
+        val tmp = FloatArray(n * n)
+        val k = 2 * r + 1
+        for (y in 0 until n) {
+            var acc = 0f
+            for (x in -r..r) acc += a[y * n + x.coerceIn(0, n - 1)]
+            for (x in 0 until n) {
+                tmp[y * n + x] = acc / k
+                acc += a[y * n + (x + r + 1).coerceIn(0, n - 1)] - a[y * n + (x - r).coerceIn(0, n - 1)]
+            }
+        }
+        val out = FloatArray(n * n)
+        for (x in 0 until n) {
+            var acc = 0f
+            for (y in -r..r) acc += tmp[y.coerceIn(0, n - 1) * n + x]
+            for (y in 0 until n) {
+                out[y * n + x] = minOf(1f, acc / k * 2f)
+                acc += tmp[(y + r + 1).coerceIn(0, n - 1) * n + x] - tmp[(y - r).coerceIn(0, n - 1) * n + x]
+            }
+        }
+        for (j in out.indices) if (m[j]) out[j] = 1f
+        return out
     }
 
     private fun dilate(m: BooleanArray, n: Int, r: Int): BooleanArray {

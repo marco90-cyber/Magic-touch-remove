@@ -58,6 +58,13 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     var canRedo by mutableStateOf(false); private set
     var message by mutableStateOf<String?>(null)
     var comparing by mutableStateOf(false)
+    /** Pixel in più rispetto al bordo della selezione automatica (0/5/10/15). */
+    var selExtra by mutableIntStateOf(0); private set
+    /** Durezza della selezione: 1 = bordo netto; meno = il riempimento si fonde in modo graduale con la foto. */
+    var selSoft by mutableFloatStateOf(1f)
+    private var selRaw: BooleanArray? = null
+    private var selBase: Bitmap? = null
+    private var selResult: Bitmap? = null
     val original: Bitmap? get() = source
 
     val lasso = Path()
@@ -282,7 +289,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         busyText = "Rimozione in corso…"
         viewModelScope.launch {
             val res = withContext(Dispatchers.Default) {
-                runCatching { Inpainter.get(ctx).inpaint(img, mk, expand.roundToInt()) }
+                runCatching { Inpainter.get(ctx).inpaint(img, mk, expand.roundToInt(), ((1f - selSoft) * 10f).roundToInt()) }
             }
             res.onSuccess { out ->
                 if (out == null) {
@@ -300,7 +307,56 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ---- selezione automatica (MobileSAM) ----
+    // ---- selezione automatica ----
+    private fun selectionBitmap(raw: BooleanArray, w: Int, h: Int, extra: Int): Bitmap {
+        val d = dilate(raw, w, h, extra)
+        val px = IntArray(w * h) { if (d[it]) 0xFF000000.toInt() else 0 }
+        return Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888)
+    }
+
+    /** Allarga la selezione di [r] pixel (forma ottagonale: passi alternati a croce e a quadrato). */
+    private fun dilate(src: BooleanArray, w: Int, h: Int, r: Int): BooleanArray {
+        var cur = src
+        repeat(r) { step ->
+            val out = cur.copyOf()
+            val square = step % 2 == 1
+            for (y in 0 until h) {
+                val row = y * w
+                for (x in 0 until w) {
+                    if (out[row + x]) continue
+                    var hit = (x > 0 && cur[row + x - 1]) || (x < w - 1 && cur[row + x + 1]) ||
+                        (y > 0 && cur[row - w + x]) || (y < h - 1 && cur[row + w + x])
+                    if (!hit && square) hit = (y > 0 && ((x > 0 && cur[row - w + x - 1]) || (x < w - 1 && cur[row - w + x + 1]))) ||
+                        (y < h - 1 && ((x > 0 && cur[row + w + x - 1]) || (x < w - 1 && cur[row + w + x + 1])))
+                    if (hit) out[row + x] = true
+                }
+            }
+            cur = out
+        }
+        return cur
+    }
+
+    /** Cambia di quanti pixel la selezione automatica sborda; aggiorna subito la selezione attuale. */
+    fun setSelExtra(px: Int) {
+        if (px == selExtra) return
+        selExtra = px
+        val raw = selRaw ?: return
+        val base = selBase ?: return
+        val cur = mask ?: return
+        if (cur !== selResult || busy) return
+        val img = image ?: return
+        viewModelScope.launch {
+            val sel = withContext(Dispatchers.Default) { selectionBitmap(raw, img.width, img.height, px) }
+            if (mask === cur && selExtra == px) {
+                val copy = base.copy(Bitmap.Config.ALPHA_8, true)
+                Canvas(copy).drawBitmap(sel, 0f, 0f, null)
+                mask = copy; selResult = copy
+                version++
+            }
+        }
+    }
+
+    // ---- selezione automatica (MobileSAM / SAM 2) ----
     /** Analizza in anticipo la foto corrente, così il tocco successivo è istantaneo. */
     fun prepareSegmenter(quiet: Boolean = false) {
         val img = image ?: return
@@ -335,13 +391,13 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val res = withContext(Dispatchers.Default) {
                 runCatching {
-                    val sel = Segmenter.get(ctx).select(img, point, box) ?: return@runCatching null
-                    val px = IntArray(img.width * img.height) { if (sel[it]) 0xFF000000.toInt() else 0 }
-                    Bitmap.createBitmap(px, img.width, img.height, Bitmap.Config.ARGB_8888)
+                    val raw = Segmenter.get(ctx).select(img, point, box) ?: return@runCatching null
+                    raw to selectionBitmap(raw, img.width, img.height, selExtra)
                 }
             }
             busy = false
-            res.onSuccess { sel ->
+            res.onSuccess { pair ->
+                val sel = pair?.second
                 if (sel == null) {
                     message = "Nessun oggetto trovato qui"
                 } else if (image === img) {
@@ -349,6 +405,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                     val copy = mk.copy(Bitmap.Config.ALPHA_8, true)
                     Canvas(copy).drawBitmap(sel, 0f, 0f, null)
                     mask = copy
+                    selRaw = pair!!.first; selBase = mk; selResult = copy
                     hasMask = true
                     version++
                     if (auto) runInpaint()

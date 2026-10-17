@@ -101,6 +101,7 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
     var showSettings by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var sizePreview by remember { mutableStateOf(false) }
+    var showSelMenu by remember { mutableStateOf(false) }
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var selStart by remember { mutableStateOf<Offset?>(null) }
     var selEnd by remember { mutableStateOf<Offset?>(null) }
@@ -325,6 +326,29 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
             }
         }
 
+        // ---- pannello selezione automatica ----
+        if (showSelMenu && !showSettings) {
+            Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Selezione automatica", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                        androidx.compose.material3.TextButton(onClick = { showSelMenu = false }) { Text("Fatto") }
+                    }
+                    Text("Pixel in più rispetto al bordo", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(0, 5, 10, 15).forEach { px ->
+                            FilterChip(selected = vm.selExtra == px, onClick = { vm.setSelExtra(px) }, label = { Text(if (px == 0) "Nessuno" else "+$px px") })
+                        }
+                    }
+                    SettingSlider("Durezza ${(vm.selSoft * 100).toInt()}%", vm.selSoft, 0f..1f) { vm.selSoft = it }
+                    Text(
+                        "Durezza alta = il riempimento ha il taglio netto sul bordo; bassa = si fonde gradualmente con la foto intorno.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
         // ---- pannello impostazioni ----
         if (showSettings) {
             Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
@@ -339,13 +363,32 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
         }
 
         // ---- barra strumenti ----
+        // tieni premuto su Selezione per scegliere quanti pixel sborda la selezione automatica e la durezza
+        val selHold = Modifier.pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                val t0 = System.currentTimeMillis()
+                val up = withTimeoutOrNull(600L) { waitForUpOrCancellation(PointerEventPass.Initial) }
+                if (up == null && System.currentTimeMillis() - t0 >= 550L) {
+                    vm.tool = Tool.SELECT; showSettings = false; showSelMenu = true
+                    vm.prepareSegmenter(quiet = true)
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    while (true) {
+                        val ev = awaitPointerEvent(PointerEventPass.Initial)
+                        ev.changes.forEach { it.consume() }
+                        if (ev.changes.none { it.pressed }) break
+                    }
+                }
+            }
+        }
         // tieni premuto 1 secondo su Pennello/Gomma, poi trascina a destra/sinistra per cambiare la dimensione
         val sizeAdjust = { tool: Tool ->
             Modifier.pointerInput(tool) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    val t0 = System.currentTimeMillis()
                     val up = withTimeoutOrNull(1000L) { waitForUpOrCancellation(PointerEventPass.Initial) }
-                    if (up == null && down.pressed) {
+                    if (up == null && System.currentTimeMillis() - t0 >= 950L) {
                         vm.tool = tool; showSettings = false; sizePreview = true
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                         var lastX = down.position.x
@@ -363,12 +406,12 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
             }
         }
         NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-            ToolItem(Icons.Filled.TouchApp, "Selezione", vm.tool == Tool.SELECT && !showSettings) { vm.tool = Tool.SELECT; showSettings = false; vm.prepareSegmenter() }
-            ToolItem(Icons.Filled.Brush, "Pennello", vm.tool == Tool.BRUSH && !showSettings, sizeAdjust(Tool.BRUSH), { vm.tool = Tool.BRUSH; showSettings = false })
-            ToolItem(Icons.Filled.Gesture, "Lasso", vm.tool == Tool.LASSO && !showSettings) { vm.tool = Tool.LASSO; showSettings = false }
-            ToolItem(Icons.Filled.Backspace, "Gomma", vm.tool == Tool.ERASER && !showSettings, sizeAdjust(Tool.ERASER), { vm.tool = Tool.ERASER; showSettings = false })
-            ToolItem(Icons.Filled.Restore, "Ripristina", vm.tool == Tool.RESTORE && !showSettings) { vm.tool = Tool.RESTORE; showSettings = false }
-            ToolItem(Icons.Filled.Tune, "Impostazioni", showSettings) { showSettings = !showSettings }
+            ToolItem(Icons.Filled.TouchApp, "Selezione", vm.tool == Tool.SELECT && !showSettings, selHold) { vm.tool = Tool.SELECT; showSettings = false; showSelMenu = false; vm.prepareSegmenter() }
+            ToolItem(Icons.Filled.Brush, "Pennello", vm.tool == Tool.BRUSH && !showSettings, sizeAdjust(Tool.BRUSH), { vm.tool = Tool.BRUSH; showSettings = false; showSelMenu = false })
+            ToolItem(Icons.Filled.Gesture, "Lasso", vm.tool == Tool.LASSO && !showSettings) { vm.tool = Tool.LASSO; showSettings = false; showSelMenu = false }
+            ToolItem(Icons.Filled.Backspace, "Gomma", vm.tool == Tool.ERASER && !showSettings, sizeAdjust(Tool.ERASER), { vm.tool = Tool.ERASER; showSettings = false; showSelMenu = false })
+            ToolItem(Icons.Filled.Restore, "Ripristina", vm.tool == Tool.RESTORE && !showSettings) { vm.tool = Tool.RESTORE; showSettings = false; showSelMenu = false }
+            ToolItem(Icons.Filled.Tune, "Impostazioni", showSettings) { showSettings = !showSettings; showSelMenu = false }
         }
     }
 }
