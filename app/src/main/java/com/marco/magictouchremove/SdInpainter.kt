@@ -295,7 +295,10 @@ object SdDiag {
     }
     fun clear() { runCatching { file?.delete() } }
     /** Restituisce il rapporto dell'ultima chiusura anomala (e lo cancella). */
+    private var checked = false
     fun takeCrash(): String? = runCatching {
+        if (checked) return null        // solo al primo avvio del processo: se l'attività viene ricreata durante l'elaborazione non è una chiusura anomala
+        checked = true
         val f = file ?: return null
         if (!f.exists()) null else f.readText().also { f.delete() }
     }.getOrNull()

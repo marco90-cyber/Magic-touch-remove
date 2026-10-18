@@ -16,6 +16,7 @@ object AppLog {
     private const val MAX = 400_000L
 
     fun init(ctx: Context) {
+        if (file != null) { log("APP", "schermata ricreata (stesso processo)"); return }   // onCreate richiamato senza nuovo avvio
         file = File(ctx.filesDir, "app_log.txt")
         val prev = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { t, e ->
