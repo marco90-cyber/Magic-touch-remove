@@ -389,7 +389,7 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
                         androidx.compose.material3.OutlinedTextField(
                             value = vm.prompt, onValueChange = { vm.prompt = it },
                             label = { Text("Cosa metto al posto? (IA generativa, in inglese)") },
-                            placeholder = { Text("vuoto = ricostruisci lo sfondo") },
+                            placeholder = { Text("vuoto = ricostruisci lo sfondo (consigliato)") },
                             singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                         )
                     }

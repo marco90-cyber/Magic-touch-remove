@@ -88,7 +88,7 @@ class ClipTokenizer(vocabJson: String, mergesText: String) {
  * Standard: 20 passi DDIM con guida del testo (7,5). LCM: 4 passi senza guida.
  * Ogni sottomodello viene caricato solo quando serve e subito rilasciato, per contenere la RAM.
  */
-class SdInpainter(private val paths: Map<String, String>, private val lcm: Boolean, private val npu: Boolean) : Inpainter() {
+class SdInpainter(private val paths: Map<String, String>, private val lcm: Boolean, private val npu: Boolean, private val lamaPath: String? = null) : Inpainter() {
 
     private fun path(name: String) = paths[name] ?: error("file mancante: $name")
     private val unetName = if (lcm) "sd15_inpaint_lcm_unet_fp16.onnx" else "sd15_inpaint_unet_fp16.onnx"
@@ -127,10 +127,13 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
         checkCancel()
         progress("IA generativa · preparazione del testo…")
         val tok = ClipTokenizer(File(path("clip_vocab.json")).readText(), File(path("clip_merges.txt")).readText())
-        val text = Inpainter.prompt
+        // testo vuoto = «ricostruisci lo sfondo»: si parte dal riempimento di LaMa e si rifinisce; con un testo si genera da zero
+        val userText = Inpainter.prompt.trim()
+        val rebuild = userText.isEmpty()
+        val text = if (rebuild) "empty background, seamless natural continuation of the surrounding scene, no objects" else userText
         val (cond, unc) = session("sd15_text_encoder_fp16.onnx").use { s ->
             val c = embed(s, tok, text)
-            c to (if (!lcm) embed(s, tok, "") else null)
+            c to (if (!lcm) embed(s, tok, "object, person, animal, text, logo, watermark, blurry") else null)
         }
 
         // immagine con il buco azzerato → latente
@@ -144,13 +147,37 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
             img[plane + i] = ((p shr 8) and 255) / 127.5f - 1f
             img[2 * plane + i] = (p and 255) / 127.5f - 1f
         }
-        val ml = session("sd15_vae_encoder.onnx").use { s ->
-            OnnxTensor.createTensor(env, FloatBuffer.wrap(img), longArrayOf(1, 3, n.toLong(), n.toLong())).use { t ->
+        // base: riempimento di LaMa (solo se si ricostruisce lo sfondo e LaMa è scaricato)
+        var base: IntArray? = null
+        if (rebuild && lamaPath != null) {
+            progress("IA generativa · sfondo di base…")
+            base = runCatching {
+                val l = LamaInpainter(lamaPath)
+                try { l.run512(px, hole, n) } finally { l.close() }
+            }.onFailure { AppLog.log("IA", "base LaMa non riuscita: ${it.message}") }.getOrNull()
+        }
+        fun encode(s: OrtSession, data: FloatArray): FloatArray =
+            OnnxTensor.createTensor(env, FloatBuffer.wrap(data), longArrayOf(1, 3, n.toLong(), n.toLong())).use { t ->
                 s.run(mapOf(s.inputNames.first() to t)).use { r ->
                     val fb = (r[0] as OnnxTensor).floatBuffer
                     FloatArray(fb.remaining()).also { fb.get(it) }
                 }
             }
+        var z0: FloatArray? = null
+        val ml = session("sd15_vae_encoder.onnx").use { s ->
+            val m = encode(s, img)
+            if (base != null) {
+                val b = base!!
+                val full = FloatArray(3 * plane)
+                for (i in 0 until plane) {
+                    val p = if (hole[i]) b[i] else px[i]
+                    full[i] = ((p shr 16) and 255) / 127.5f - 1f
+                    full[plane + i] = ((p shr 8) and 255) / 127.5f - 1f
+                    full[2 * plane + i] = (p and 255) / 127.5f - 1f
+                }
+                z0 = encode(s, full)
+            }
+            m
         }
         // maschera a risoluzione dei latenti (max-pooling 8×8)
         val m64 = FloatArray(lplane)
@@ -175,12 +202,20 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
         }
         val rng = Random(System.nanoTime())
         var x = FloatArray(4 * lplane) { rng.nextGaussian().toFloat() }
+        // con la base di LaMa si salta la parte iniziale: l'IA aggiunge solo dettaglio e texture
+        val start = if (z0 == null) 0 else if (lcm) 2 else 8
+        if (z0 != null) {
+            val aS = acp[timesteps[start]]
+            val zz = z0!!
+            x = FloatArray(x.size) { (sqrt(aS) * zz[it] + sqrt(1 - aS) * x[it]).toFloat() }
+        }
         val guidance = 7.5f
 
         session(unetName).use { unet ->
             for ((i, t) in timesteps.withIndex()) {
+                if (i < start) continue
                 checkCancel()
-                progress("IA generativa · passo ${i + 1} di $steps")
+                progress("IA generativa · passo ${i - start + 1} di ${steps - start}")
                 // un solo campione per volta (batch 1): metà della RAM rispetto a calcolare insieme testo e «vuoto»
                 fun predict(ehs: FloatArray): FloatArray {
                     val inp = FloatArray(9 * lplane)
