@@ -1,6 +1,6 @@
 # Magic Touch Remove
 
-App Android (Kotlin + Jetpack Compose, Material 3) per **rimuovere oggetti, persone e ombre dalle foto con l'intelligenza artificiale**, nello stile di TouchRetouch.
+App Android (Kotlin + Jetpack Compose, Material 3) per **rimuovere oggetti, persone e ombre dalle foto con l'intelligenza artificiale**.
 Tutto gira **sul telefono**: le foto non vengono mai inviate a nessun server.
 
 [![Ultima versione](https://img.shields.io/github/v/release/marco90-cyber/Magic-touch-remove?label=APK)](https://github.com/marco90-cyber/Magic-touch-remove/releases/latest)
