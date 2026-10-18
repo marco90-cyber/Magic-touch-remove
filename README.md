@@ -19,11 +19,10 @@ Tutto gira **sul telefono**: le foto non vengono mai inviate a nessun server.
 - [Licenze](#licenze)
 
 ## Screenshot
-> _Gli screenshot arriveranno presto._ Le immagini andranno nella cartella [`docs/screenshots`](docs/screenshots).
-
-| Home | Editor | Selezione automatica | Impostazioni |
-|---|---|---|---|
-| _in arrivo_ | _in arrivo_ | _in arrivo_ | _in arrivo_ |
+<table>
+<tr><td align="center"><img src="docs/screenshots/01-home.png" width="200"><br><sub>Home</sub></td><td align="center"><img src="docs/screenshots/07-editor.png" width="200"><br><sub>Editor</sub></td><td align="center"><img src="docs/screenshots/04-pennello.png" width="200"><br><sub>Pennello e strumenti</sub></td><td align="center"><img src="docs/screenshots/05-selezione-automatica.png" width="200"><br><sub>Selezione automatica, pixel in più e ombra</sub></td></tr>
+<tr><td align="center"><img src="docs/screenshots/08-salva.png" width="200"><br><sub>Salvataggio a piena risoluzione</sub></td><td align="center"><img src="docs/screenshots/02-impostazioni.png" width="200"><br><sub>Impostazioni</sub></td><td align="center"><img src="docs/screenshots/06-aggiornamento.png" width="200"><br><sub>Aggiornamento dell'app</sub></td><td align="center"><img src="docs/screenshots/03-informazioni.png" width="200"><br><sub>Informazioni e licenze</sub></td></tr>
+</table>
 
 ## Funzioni
 
