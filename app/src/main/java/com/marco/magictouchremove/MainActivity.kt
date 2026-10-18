@@ -59,9 +59,28 @@ class MainActivity : ComponentActivity() {
         )
         ThemeSettings.init(applicationContext)
         ModelManager.init(applicationContext)
+        SdDiag.file = java.io.File(filesDir, "sd_progress.txt")
+        SdDiag.avail = {
+            val mi = android.app.ActivityManager.MemoryInfo()
+            (getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(mi)
+            "RAM libera ${mi.availMem shr 20} MB su ${mi.totalMem shr 20} MB"
+        }
+        val sdCrash = SdDiag.takeCrash()
+        if (sdCrash != null && ModelManager.npuEnabled(applicationContext)) ModelManager.setNpu(applicationContext, false)
         ModelManager.checkUpdates(applicationContext)   // controlla se ci sono nuove versioni dei modelli
         setContent {
-            MagicTheme(dark = ThemeSettings.isDark()) { App() }
+            MagicTheme(dark = ThemeSettings.isDark()) {
+                var crash by remember { mutableStateOf(sdCrash) }
+                App()
+                crash?.let { c ->
+                    AlertDialog(
+                        onDismissRequest = { crash = null },
+                        confirmButton = { TextButton(onClick = { crash = null }) { Text("OK") } },
+                        title = { Text("L'IA generativa ha chiuso l'app") },
+                        text = { Text("Il sistema ha fermato l'app durante l'elaborazione, probabilmente per memoria insufficiente.\n\nUltimo punto raggiunto:\n$c\n\nL'accelerazione NPU è stata disattivata. Usa LaMa o MI-GAN se il problema continua.") }
+                    )
+                }
+            }
         }
     }
 }

@@ -94,14 +94,17 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
     private val unetName = if (lcm) "sd15_inpaint_lcm_unet_fp16.onnx" else "sd15_inpaint_unet_fp16.onnx"
 
     private fun session(name: String): OrtSession {
+        SdDiag.mark("carico $name")
         val o = OrtSession.SessionOptions()
+        o.setMemoryPatternOptimization(false)
+        o.setCPUArenaAllocator(false)
         o.setIntraOpNumThreads(4)
         o.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.BASIC_OPT)
         if (npu) runCatching { o.addNnapi(EnumSet.of(NNAPIFlags.USE_FP16)) }
-        return env.createSession(path(name), o)
+        return env.createSession(path(name), o).also { SdDiag.mark("caricato $name") }
     }
 
-    private fun progress(s: String) { Inpainter.onProgress?.invoke(s) }
+    private fun progress(s: String) { SdDiag.mark(s); Inpainter.onProgress?.invoke(s) }
     private fun checkCancel() { if (Inpainter.cancelRequested) throw CancellationException("annullato") }
 
     private fun embed(s: OrtSession, tok: ClipTokenizer, text: String): FloatArray {
@@ -114,7 +117,10 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
         }
     }
 
-    override fun run512(px: IntArray, hole: BooleanArray, n: Int): IntArray {
+    override fun run512(px: IntArray, hole: BooleanArray, n: Int): IntArray =
+        try { runSd(px, hole, n) } finally { SdDiag.clear() }
+
+    private fun runSd(px: IntArray, hole: BooleanArray, n: Int): IntArray {
         val plane = n * n
         val lat = n / 8
         val lplane = lat * lat
@@ -237,4 +243,17 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
     }
 
     override fun close() {}
+}
+
+/** Segna a che punto è l'IA generativa: se l'app viene chiusa dal sistema, al riavvio sappiamo dove. */
+object SdDiag {
+    var file: File? = null
+    var avail: (() -> String)? = null
+    fun mark(stage: String) { runCatching { file?.writeText("$stage\n${avail?.invoke() ?: ""}") } }
+    fun clear() { runCatching { file?.delete() } }
+    /** Restituisce il rapporto dell'ultima chiusura anomala (e lo cancella). */
+    fun takeCrash(): String? = runCatching {
+        val f = file ?: return null
+        if (!f.exists()) null else f.readText().also { f.delete() }
+    }.getOrNull()
 }
