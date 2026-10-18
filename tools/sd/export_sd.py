@@ -54,10 +54,16 @@ def to_fp16(p32, final):
         os.remove(os.path.join(TMP, f))
     log("fp16", os.path.basename(final), os.path.getsize(final) // 1_000_000, "MB", round(time.time() - t0), "s")
 
+def keep_fp32(p32, final):
+    shutil.move(p32, final)
+    for f in os.listdir(TMP):
+        os.remove(os.path.join(TMP, f))
+    log("fp32", os.path.basename(final), os.path.getsize(final) // 1_000_000, "MB")
+
 ids = torch.zeros(1, 77, dtype=torch.int32)
 to_fp16(export(TE(pipe.text_encoder), (ids,), "te", ["input_ids"], ["hidden"]), f"{OUT}/sd15_text_encoder_fp16.onnx")
-to_fp16(export(VE(pipe.vae), (torch.randn(1, 3, 512, 512),), "ve", ["image"], ["latent"]), f"{OUT}/sd15_vae_encoder_fp16.onnx")
-to_fp16(export(VD(pipe.vae), (torch.randn(1, 4, 64, 64),), "vd", ["latent"], ["image"]), f"{OUT}/sd15_vae_decoder_fp16.onnx")
+keep_fp32(export(VE(pipe.vae), (torch.randn(1, 3, 512, 512),), "ve", ["image"], ["latent"]), f"{OUT}/sd15_vae_encoder.onnx")
+keep_fp32(export(VD(pipe.vae), (torch.randn(1, 4, 64, 64),), "vd", ["latent"], ["image"]), f"{OUT}/sd15_vae_decoder.onnx")
 
 args = (torch.randn(2, 9, 64, 64), torch.tensor([500.0]), torch.randn(2, 77, 768))
 dyn = {"sample": {0: "b"}, "encoder_hidden_states": {0: "b"}, "noise": {0: "b"}}
@@ -92,6 +98,15 @@ l.set_timesteps(4)
 log("lcm timesteps diffusers", list(l.timesteps.numpy()), "miei", sdref.lcm_timesteps(4))
 assert [int(v) for v in l.timesteps.numpy()] == [int(v) for v in sdref.lcm_timesteps(4)]
 
+# ---- tutti i modelli devono caricarsi ----
+import onnxruntime as ort
+for f in sorted(os.listdir(OUT)):
+    if f.endswith(".onnx"):
+        try:
+            ort.InferenceSession(os.path.join(OUT, f), providers=["CPUExecutionProvider"]); log("carica OK", f)
+        except Exception as e:
+            log("carica ERRORE", f, str(e)[:600])
+
 # ---- prova completa con ONNX ----
 import skimage.data
 im = Image.fromarray(skimage.data.astronaut()).resize((512, 512), Image.LANCZOS)
@@ -101,7 +116,7 @@ dr.rectangle((20, 40, 120, 110), fill=255)
 holeb = np.asarray(hole) > 127
 img = np.asarray(im)
 sess = {"tok": tok, "te": sdref.make_session(f"{OUT}/sd15_text_encoder_fp16.onnx"),
-        "ve": sdref.make_session(f"{OUT}/sd15_vae_encoder_fp16.onnx"), "vd": sdref.make_session(f"{OUT}/sd15_vae_decoder_fp16.onnx")}
+        "ve": sdref.make_session(f"{OUT}/sd15_vae_encoder.onnx"), "vd": sdref.make_session(f"{OUT}/sd15_vae_decoder.onnx")}
 shown = [img.copy()]
 shown[0][holeb] = (255, 0, 255)
 for name, lcm, steps in [("lcm", True, 4), ("std", False, 20)]:
