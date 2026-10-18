@@ -367,6 +367,7 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
                             FilterChip(selected = vm.selExtra == px, onClick = { vm.changeSelExtra(px) }, label = { Text(if (px == 0) "Nessuno" else "+$px px") })
                         }
                     }
+                    SettingSlider(if (vm.selShadow <= 0f) "Ombra: non inclusa" else "Includi ombra ${(vm.selShadow * 100).toInt()}%", vm.selShadow, 0f..1f) { vm.changeSelShadow(if (it < 0.05f) 0f else it) }
                     SettingSlider("Durezza ${(vm.selSoft * 100).toInt()}%", vm.selSoft, 0f..1f) { vm.selSoft = it }
                     Text(
                         "Durezza alta = il riempimento ha il taglio netto sul bordo; bassa = si fonde gradualmente con la foto intorno.",

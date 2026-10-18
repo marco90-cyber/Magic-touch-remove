@@ -67,6 +67,9 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     var selExtra by mutableIntStateOf(0); private set
     /** Durezza della selezione: 1 = bordo netto; meno = il riempimento si fonde in modo graduale con la foto. */
     var selSoft by mutableFloatStateOf(1f)
+    /** Includi l'ombra dell'oggetto selezionato: 0 = no, fino a 1 = ombra più ampia. */
+    var selShadow by mutableFloatStateOf(0f); private set
+    private var refreshJob: kotlinx.coroutines.Job? = null
     private var selRaw: BooleanArray? = null
     private var selBase: Bitmap? = null
     private var selResult: Bitmap? = null
@@ -325,8 +328,9 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---- selezione automatica ----
-    private fun selectionBitmap(raw: BooleanArray, w: Int, h: Int, extra: Int): Bitmap {
-        val d = dilate(raw, w, h, extra)
+    private fun selectionBitmap(raw: BooleanArray, w: Int, h: Int, extra: Int, shadow: Float = 0f, img: Bitmap? = null): Bitmap {
+        val eff = if (shadow > 0f && img != null) { val sh = ShadowSelect.grow(img, raw, shadow); BooleanArray(raw.size) { raw[it] || sh[it] } } else raw
+        val d = dilate(eff, w, h, extra)
         val px = IntArray(w * h) { if (d[it]) 0xFF000000.toInt() else 0 }
         return Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888)
     }
@@ -357,14 +361,26 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun changeSelExtra(px: Int) {
         if (px == selExtra) return
         selExtra = px
+        refreshSelection()
+    }
+
+    /** Includi (o no) l'ombra dell'oggetto selezionato. */
+    fun changeSelShadow(v: Float) {
+        selShadow = v
+        refreshSelection()
+    }
+
+    private fun refreshSelection() {
         val raw = selRaw ?: return
         val base = selBase ?: return
         val cur = mask ?: return
         if (cur !== selResult || busy) return
         val img = image ?: return
-        viewModelScope.launch {
-            val sel = withContext(Dispatchers.Default) { selectionBitmap(raw, img.width, img.height, px) }
-            if (mask === cur && selExtra == px) {
+        val extra = selExtra; val shd = selShadow
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
+            val sel = withContext(Dispatchers.Default) { selectionBitmap(raw, img.width, img.height, extra, shd, img) }
+            if (mask === cur) {
                 val copy = base.copy(Bitmap.Config.ALPHA_8, true)
                 Canvas(copy).drawBitmap(sel, 0f, 0f, null)
                 mask = copy; selResult = copy
@@ -409,7 +425,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             val res = withContext(Dispatchers.Default) {
                 runCatching {
                     val raw = Segmenter.get(ctx).select(img, point, box) ?: return@runCatching null
-                    raw to selectionBitmap(raw, img.width, img.height, selExtra)
+                    raw to selectionBitmap(raw, img.width, img.height, selExtra, selShadow, img)
                 }
             }
             busy = false
