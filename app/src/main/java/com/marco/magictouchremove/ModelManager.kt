@@ -287,8 +287,11 @@ object ModelManager {
             return
         }
         _state.value = ModelState.Downloading(0f)
+        WorkKeeper.start(app, "Download dei modelli IA")
         scope.launch {
+          try {
             if (replacing) { Inpainter.release(); Segmenter.release() }
+            var lastPct = -1
             var doneBefore = 0L
             for (m in targets) {
                 val r = usableRemote(app, m)
@@ -303,7 +306,10 @@ object ModelManager {
                 for ((url, ver, sha) in attempts) {
                     try {
                         fetch(app, m, url, minSize, sha) { done ->
-                            _state.value = ModelState.Downloading(((doneBefore + done).toFloat() / total).coerceIn(0f, 0.99f))
+                            val f = ((doneBefore + done).toFloat() / total).coerceIn(0f, 0.99f)
+                            _state.value = ModelState.Downloading(f)
+                            val pct = (f * 100).toInt()
+                            if (pct != lastPct) { lastPct = pct; Notifier.progress(app, "Download dei modelli IA", "${m.name} · $pct%", pct) }
                         }
                         versionFile(app, m).writeText(ver.toString())
                         ok = true
@@ -316,12 +322,19 @@ object ModelManager {
                     _updateError.value = lastError
                     _state.value = if (anyReady(app)) ModelState.Ready else ModelState.Error(lastError)
                     autoActivate(app); bump()
+                    AppLog.log("DOWNLOAD", "non riuscito: $lastError")
+                    if (Notifier.downloadsOn(app) && !AppState.foreground) Notifier.done(app, "Download non riuscito", lastError)
                     return@launch
                 }
                 doneBefore += r?.size?.takeIf { it > 0 } ?: m.expected
             }
             _state.value = ModelState.Ready
             autoActivate(app); bump()
+            AppLog.log("DOWNLOAD", "completato")
+            if (Notifier.downloadsOn(app) && !AppState.foreground) Notifier.done(app, "Download completato", "I modelli IA sono pronti.")
+          } finally {
+            WorkKeeper.stop(app)
+          }
         }
     }
 
@@ -329,18 +342,35 @@ object ModelManager {
         val target = fileOf(ctx, m)
         target.parentFile?.mkdirs()
         val part = File(target.path + ".part")
+        val marker = File(target.path + ".part.url")
+        // si riprende un download interrotto solo se l'indirizzo è lo stesso
+        if (part.exists() && (!marker.exists() || marker.readText() != url)) part.delete()
+        marker.writeText(url)
+        val resumeFrom = if (part.exists()) part.length() else 0L
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.connectTimeout = 20_000
         conn.readTimeout = 30_000
         conn.instanceFollowRedirects = true
         conn.setRequestProperty("User-Agent", "MagicTouchRemove/1.0")
+        if (resumeFrom > 0) conn.setRequestProperty("Range", "bytes=$resumeFrom-")
+        var drop = false
         try {
-            if (conn.responseCode !in 200..299) error("HTTP ${conn.responseCode}")
+            val code = conn.responseCode
+            if (code == 416) { drop = true; error("riprova") }
+            if (code !in 200..299) error("HTTP $code")
+            val append = code == 206 && resumeFrom > 0
             val digest = MessageDigest.getInstance("SHA-256")
             var done = 0L
             var lastReport = 0L
+            if (append) {
+                part.inputStream().use { inp ->
+                    val b = ByteArray(1 shl 20)
+                    while (true) { val k = inp.read(b); if (k < 0) break; digest.update(b, 0, k) }
+                }
+                done = resumeFrom
+            } else if (part.exists()) part.delete()
             conn.inputStream.use { input ->
-                part.outputStream().use { out ->
+                java.io.FileOutputStream(part, append).use { out ->
                     val buf = ByteArray(256 * 1024)
                     while (true) {
                         val n = input.read(buf)
@@ -352,16 +382,18 @@ object ModelManager {
                     }
                 }
             }
-            if (part.length() < minSize) error("file incompleto")
+            if (part.length() < minSize) { drop = true; error("file incompleto") }
             if (sha256 != null) {
                 val got = digest.digest().joinToString("") { "%02x".format(it) }
-                if (!got.equals(sha256, ignoreCase = true)) error("controllo di integrità fallito")
+                if (!got.equals(sha256, ignoreCase = true)) { drop = true; error("controllo di integrità fallito") }
             }
             target.delete()
             if (!part.renameTo(target)) error("impossibile salvare il modello")
+            marker.delete()
         } finally {
             conn.disconnect()
-            if (part.exists()) part.delete()
+            // in caso di interruzione il file parziale resta, così il download riprende da dove era arrivato
+            if (drop) { part.delete(); marker.delete() }
         }
     }
 }

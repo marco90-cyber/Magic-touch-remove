@@ -51,8 +51,18 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.foundation.layout.Row
 
 class MainActivity : ComponentActivity() {
+    private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    override fun onStart() { super.onStart(); AppState.started++ }
+    override fun onStop() { AppState.started = maxOf(0, AppState.started - 1); super.onStop() }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Notifier.init(applicationContext)
+        if (android.os.Build.VERSION.SDK_INT >= 33 && !Notifier.asked(this) &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            Notifier.markAsked(this)
+            askNotifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(AColor.TRANSPARENT, AColor.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.auto(AColor.TRANSPARENT, AColor.TRANSPARENT)

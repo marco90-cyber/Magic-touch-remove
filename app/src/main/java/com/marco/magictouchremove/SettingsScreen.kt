@@ -64,6 +64,7 @@ import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Update
@@ -79,7 +80,7 @@ private const val GITHUB_USER = "marco90-cyber"
 private const val REPO_URL = "https://github.com/marco90-cyber/Magic-touch-remove"
 
 
-private enum class Page(val title: String) { MAIN("Impostazioni"), UPDATES("Aggiornamenti"), MODELS("Modelli IA"), THEME("Tema"), LOG("Registro eventi"), INFO("Informazioni") }
+private enum class Page(val title: String) { MAIN("Impostazioni"), UPDATES("Aggiornamenti"), MODELS("Modelli IA"), THEME("Tema"), NOTIFY("Notifiche"), LOG("Registro eventi"), INFO("Informazioni") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -128,6 +129,7 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
                     MenuRow(Icons.Filled.SystemUpdate, "Aggiornamenti", "App e modelli IA", hasUpdate || appUpdate) { page = Page.UPDATES }
                     MenuRow(Icons.Filled.Memory, "Modelli IA", "Scegli, scarica ed elimina i modelli", false) { page = Page.MODELS }
                     MenuRow(Icons.Filled.Palette, "Tema", when (ThemeSettings.mode) { 1 -> "Chiaro"; 2 -> "Scuro"; else -> "Come il sistema" }, false) { page = Page.THEME }
+                    MenuRow(Icons.Filled.Notifications, "Notifiche", "Avanzamento dei download e fine delle modifiche", false) { page = Page.NOTIFY }
                     MenuRow(Icons.Filled.Description, "Registro eventi", "Visualizza e salva il log per diagnosticare problemi", false) { page = Page.LOG }
                     MenuRow(Icons.Filled.Info, "Informazioni", "Sviluppatori, versione, privacy e crediti", false) { page = Page.INFO }
                 }
@@ -291,6 +293,36 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
                     ThemeOption(Icons.Filled.LightMode, "Chiaro", "Sfondo chiaro", 1)
                     ThemeOption(Icons.Filled.DarkMode, "Scuro", "Sfondo scuro, meno affaticamento alla sera", 2)
                 }
+                Page.NOTIFY -> {
+                    var dl by remember { mutableStateOf(Notifier.downloadsOn(ctx)) }
+                    var dn by remember { mutableStateOf(Notifier.doneOn(ctx)) }
+                    var allowed by remember { mutableStateOf(Notifier.canPost(ctx)) }
+                    val ask = androidx.activity.compose.rememberLauncherForActivityResult(
+                        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+                    ) { allowed = Notifier.canPost(ctx) }
+                    Body("Durante un download o un'elaborazione lunga l'app mostra una notifica con l'avanzamento e continua a lavorare anche se la chiudi dagli ultimi usati. Qui scegli quali avvisi di fine lavoro ricevere.")
+                    if (!allowed) {
+                        Card(colors = CardDefaults.cardColors(containerColor = cs.errorContainer)) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Le notifiche sono disattivate per l'app: il lavoro continua, ma non vedrai avanzamento né avvisi.", color = cs.onErrorContainer)
+                                Button(onClick = {
+                                    if (android.os.Build.VERSION.SDK_INT < 33 || Notifier.asked(ctx)) {
+                                        runCatching {
+                                            ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName))
+                                        }
+                                    } else {
+                                        Notifier.markAsked(ctx)
+                                        if (android.os.Build.VERSION.SDK_INT >= 33) ask.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                    }
+                                }) { Text("Attiva le notifiche") }
+                                OutlinedButton(onClick = { allowed = Notifier.canPost(ctx) }) { Text("Ho già attivato: ricontrolla") }
+                            }
+                        }
+                    }
+                    NotifyRow("Download dei modelli", "Avvisa quando il download finisce o fallisce (con l'app in secondo piano)", dl) { dl = it; Notifier.setDownloads(ctx, it) }
+                    NotifyRow("Modifica completata", "Avvisa quando l'elaborazione di una foto finisce mentre l'app è in secondo piano", dn) { dn = it; Notifier.setDone(ctx, it) }
+                }
                 Page.LOG -> {
                     var logText by remember { mutableStateOf(AppLog.text()) }
                     val saveLog = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -398,6 +430,20 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
     }
 }
 
+
+@Composable
+private fun NotifyRow(title: String, subtitle: String, on: Boolean, onChange: (Boolean) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Card(colors = CardDefaults.cardColors(containerColor = cs.surfaceContainer)) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
+            androidx.compose.material3.Switch(checked = on, onCheckedChange = onChange)
+        }
+    }
+}
 
 @Composable
 private fun MenuRow(icon: ImageVector, title: String, subtitle: String, badge: Boolean, onClick: () -> Unit) {

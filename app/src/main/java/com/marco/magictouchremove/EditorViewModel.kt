@@ -298,7 +298,8 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         busyText = if (generative) "IA generativa… può richiedere diversi minuti" else "Rimozione in corso…"
         Inpainter.cancelRequested = false
         Inpainter.notice = null
-        Inpainter.onProgress = if (generative) ({ s: String -> busyText = s }) else null
+        Inpainter.onProgress = if (generative) ({ s: String -> busyText = s; Notifier.progress(ctx, "IA generativa", s, -1) }) else null
+        if (generative) WorkKeeper.start(ctx, "IA generativa in corso…")
         viewModelScope.launch {
             val res = withContext(Dispatchers.Default) {
                 runCatching { Inpainter.get(ctx).inpaint(img, mk, expand.roundToInt(), ((1f - selSoft) * 10f).roundToInt()) }
@@ -320,6 +321,11 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 else "Errore IA: ${it.message ?: it.javaClass.simpleName}"
             }
             Inpainter.onProgress = null
+            if (generative) WorkKeeper.stop(ctx)
+            if (Notifier.doneOn(ctx) && !AppState.foreground && res.exceptionOrNull() !is java.util.concurrent.CancellationException) {
+                if (res.isSuccess && res.getOrNull() != null) Notifier.done(ctx, "Modifica completata", "La foto è pronta: tocca per aprirla.")
+                else if (res.isFailure) Notifier.done(ctx, "Modifica non riuscita", "Qualcosa è andato storto: tocca per vedere.")
+            }
             busyCancelable = false
             busy = false
             if (tool == Tool.SELECT && image != null) prepareSegmenter(quiet = true)
