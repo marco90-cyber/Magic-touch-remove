@@ -175,31 +175,34 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
         }
         val rng = Random(System.nanoTime())
         var x = FloatArray(4 * lplane) { rng.nextGaussian().toFloat() }
-        val batch = if (lcm) 1 else 2
         val guidance = 7.5f
 
         session(unetName).use { unet ->
             for ((i, t) in timesteps.withIndex()) {
                 checkCancel()
                 progress("IA generativa · passo ${i + 1} di $steps")
-                val inp = FloatArray(batch * 9 * lplane)
-                for (b in 0 until batch) {
-                    val o = b * 9 * lplane
-                    System.arraycopy(x, 0, inp, o, 4 * lplane)
-                    System.arraycopy(m64, 0, inp, o + 4 * lplane, lplane)
-                    System.arraycopy(ml, 0, inp, o + 5 * lplane, 4 * lplane)
-                }
-                val ehs = if (lcm) cond else unc!! + cond
-                val eps = OnnxTensor.createTensor(env, FloatBuffer.wrap(inp), longArrayOf(batch.toLong(), 9, lat.toLong(), lat.toLong())).use { ts ->
-                    OnnxTensor.createTensor(env, FloatBuffer.wrap(floatArrayOf(t.toFloat())), longArrayOf(1)).use { tt ->
-                        OnnxTensor.createTensor(env, FloatBuffer.wrap(ehs), longArrayOf(batch.toLong(), 77, 768)).use { te ->
-                            unet.run(mapOf("sample" to ts, "timestep" to tt, "encoder_hidden_states" to te)).use { r ->
-                                val fb = (r[0] as OnnxTensor).floatBuffer
-                                val all = FloatArray(fb.remaining()); fb.get(all)
-                                if (lcm) all else FloatArray(4 * lplane) { all[it] + guidance * (all[4 * lplane + it] - all[it]) }
+                // un solo campione per volta (batch 1): metà della RAM rispetto a calcolare insieme testo e «vuoto»
+                fun predict(ehs: FloatArray): FloatArray {
+                    val inp = FloatArray(9 * lplane)
+                    System.arraycopy(x, 0, inp, 0, 4 * lplane)
+                    System.arraycopy(m64, 0, inp, 4 * lplane, lplane)
+                    System.arraycopy(ml, 0, inp, 5 * lplane, 4 * lplane)
+                    return OnnxTensor.createTensor(env, FloatBuffer.wrap(inp), longArrayOf(1, 9, lat.toLong(), lat.toLong())).use { ts ->
+                        OnnxTensor.createTensor(env, FloatBuffer.wrap(floatArrayOf(t.toFloat())), longArrayOf(1)).use { tt ->
+                            OnnxTensor.createTensor(env, FloatBuffer.wrap(ehs), longArrayOf(1, 77, 768)).use { te ->
+                                unet.run(mapOf("sample" to ts, "timestep" to tt, "encoder_hidden_states" to te)).use { r ->
+                                    val fb = (r[0] as OnnxTensor).floatBuffer
+                                    FloatArray(fb.remaining()).also { fb.get(it) }
+                                }
                             }
                         }
                     }
+                }
+                val eps = if (lcm) predict(cond) else {
+                    val eu = predict(unc!!)
+                    checkCancel()
+                    val ec = predict(cond)
+                    FloatArray(4 * lplane) { eu[it] + guidance * (ec[it] - eu[it]) }
                 }
                 val aT = acp[t]
                 val x0 = DoubleArray(eps.size) { (x[it] - sqrt(1 - aT) * eps[it]) / sqrt(aT) }
