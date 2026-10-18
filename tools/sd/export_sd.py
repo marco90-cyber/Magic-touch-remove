@@ -44,12 +44,31 @@ def export(mod, args, name, inn, outn, dyn=None):
     log("esportato", name, round(time.time() - t0), "s")
     return p
 
+import onnxruntime as ort_check
+STRATEGIES = [
+    ["Resize"],
+    ["Resize", "Constant"],
+    ["Resize", "Constant", "ConstantOfShape", "Range", "Shape", "Slice", "Gather", "Concat", "Unsqueeze", "Squeeze", "Cast", "Expand", "Reshape"],
+]
+
 def to_fp16(p32, final):
     t0 = time.time()
     m = onnx.load(p32)
-    m16 = float16.convert_float_to_float16(m, keep_io_types=True, disable_shape_infer=True, op_block_list=list(float16.DEFAULT_OP_BLOCK_LIST) + ["Resize"])
-    onnx.save(m16, final)   # un solo file (< 2 GB)
-    del m, m16
+    ok = False
+    for i, extra in enumerate(STRATEGIES):
+        m16 = float16.convert_float_to_float16(m, keep_io_types=True, disable_shape_infer=True,
+                                               op_block_list=list(float16.DEFAULT_OP_BLOCK_LIST) + extra)
+        onnx.save(m16, final)
+        del m16
+        try:
+            ort_check.InferenceSession(final, providers=["CPUExecutionProvider"])
+            log("strategia", i, "carica OK per", os.path.basename(final)); ok = True; break
+        except Exception as e:
+            log("strategia", i, "ERRORE", os.path.basename(final), str(e)[:500])
+        m = onnx.load(p32)
+    if not ok:
+        raise RuntimeError("nessuna strategia fp16 valida per " + final)
+    del m
     for f in os.listdir(TMP):
         os.remove(os.path.join(TMP, f))
     log("fp16", os.path.basename(final), os.path.getsize(final) // 1_000_000, "MB", round(time.time() - t0), "s")
