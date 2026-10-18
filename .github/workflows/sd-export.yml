@@ -30,22 +30,31 @@ jobs:
           } 2>&1 | tee install.log || { tail -n 25 install.log | while IFS= read -r l; do echo "::error::${l}"; done; exit 1; }
       - name: Export and verify
         working-directory: tools/sd
+        timeout-minutes: 75
         run: |
           set -o pipefail
           python -W ignore export_sd.py "$GITHUB_WORKSPACE/out" 2>&1 | tee "$GITHUB_WORKSPACE/export.log"
-      - name: Upload log
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          grep -v "UserWarning\|warnings.warn" export.log > export-clean.log 2>/dev/null || true
-          gh release delete sd-log --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
-          gh release create sd-log export-clean.log --repo "$GITHUB_REPOSITORY" --prerelease --latest=false --title "log" --notes "log" || true
       - name: Publish release sd-v1
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete sd-v1 --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
-          gh release create sd-v1 out/*.onnx out/*.json out/*.txt out/*.png --repo "$GITHUB_REPOSITORY" --latest=false \
+          gh release create sd-v1 out/*.onnx out/*.json out/*.txt --repo "$GITHUB_REPOSITORY" --latest=false \
             --title "Stable Diffusion 1.5 Inpainting (ONNX fp16)" \
             --notes "SD 1.5 Inpainting (CreativeML OpenRAIL-M, RunwayML/Stability AI) e versione LCM (LCM-LoRA, OpenRAIL++) convertiti in ONNX fp16. Sperimentale."
+      - name: Test inpainting (slow, CPU)
+        working-directory: tools/sd
+        continue-on-error: true
+        timeout-minutes: 60
+        run: |
+          set -o pipefail
+          python -W ignore test_sd.py "$GITHUB_WORKSPACE/out" 2>&1 | tee -a "$GITHUB_WORKSPACE/export.log"
+      - name: Upload log and test image
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          grep -v "UserWarning\|warnings.warn\|W:onnxruntime" export.log > export-clean.log 2>/dev/null || true
+          gh release delete sd-log --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          files="export-clean.log"; [ -f out/sd_test.png ] && files="$files out/sd_test.png"; [ -f out/sd_report.txt ] && files="$files out/sd_report.txt"
+          gh release create sd-log $files --repo "$GITHUB_REPOSITORY" --prerelease --latest=false --title "log" --notes "log" || true
