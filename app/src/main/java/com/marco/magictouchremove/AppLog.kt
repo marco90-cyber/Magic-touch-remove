@@ -39,7 +39,7 @@ object AppLog {
         ApplicationExitInfo.REASON_LOW_MEMORY -> "memoria insufficiente (LOW_MEMORY)"
         ApplicationExitInfo.REASON_CRASH -> "crash Java"
         ApplicationExitInfo.REASON_CRASH_NATIVE -> "crash nativo"
-        ApplicationExitInfo.REASON_SIGNAL -> "segnale del sistema"
+        ApplicationExitInfo.REASON_SIGNALED -> "segnale del sistema"
         ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "uso eccessivo di risorse"
         ApplicationExitInfo.REASON_USER_REQUESTED -> "chiusa dall'utente"
         ApplicationExitInfo.REASON_ANR -> "ANR"
