@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
         )
         ThemeSettings.init(applicationContext)
         ModelManager.init(applicationContext)
+        AppLog.init(applicationContext)
         SdDiag.file = java.io.File(filesDir, "sd_progress.txt")
         SdDiag.avail = {
             val mi = android.app.ActivityManager.MemoryInfo()
@@ -66,6 +67,7 @@ class MainActivity : ComponentActivity() {
             "RAM libera ${mi.availMem shr 20} MB su ${mi.totalMem shr 20} MB"
         }
         val sdCrash = SdDiag.takeCrash()
+        if (sdCrash != null) AppLog.log("IA", "chiusura anomala durante: ${sdCrash.replace("\n", " · ")}")
         if (sdCrash != null && ModelManager.npuEnabled(applicationContext)) ModelManager.setNpu(applicationContext, false)
         ModelManager.checkUpdates(applicationContext)   // controlla se ci sono nuove versioni dei modelli
         setContent {

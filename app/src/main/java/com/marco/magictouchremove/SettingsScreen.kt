@@ -64,6 +64,7 @@ import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.Badge
@@ -78,7 +79,7 @@ private const val GITHUB_USER = "marco90-cyber"
 private const val REPO_URL = "https://github.com/marco90-cyber/Magic-touch-remove"
 
 
-private enum class Page(val title: String) { MAIN("Impostazioni"), UPDATES("Aggiornamenti"), MODELS("Modelli IA"), THEME("Tema"), INFO("Informazioni") }
+private enum class Page(val title: String) { MAIN("Impostazioni"), UPDATES("Aggiornamenti"), MODELS("Modelli IA"), THEME("Tema"), LOG("Registro eventi"), INFO("Informazioni") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -127,6 +128,7 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
                     MenuRow(Icons.Filled.SystemUpdate, "Aggiornamenti", "App e modelli IA", hasUpdate || appUpdate) { page = Page.UPDATES }
                     MenuRow(Icons.Filled.Memory, "Modelli IA", "Scegli, scarica ed elimina i modelli", false) { page = Page.MODELS }
                     MenuRow(Icons.Filled.Palette, "Tema", when (ThemeSettings.mode) { 1 -> "Chiaro"; 2 -> "Scuro"; else -> "Come il sistema" }, false) { page = Page.THEME }
+                    MenuRow(Icons.Filled.Description, "Registro eventi", "Visualizza e salva il log per diagnosticare problemi", false) { page = Page.LOG }
                     MenuRow(Icons.Filled.Info, "Informazioni", "Sviluppatori, versione, privacy e crediti", false) { page = Page.INFO }
                 }
                 Page.UPDATES -> {
@@ -288,6 +290,25 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
                     ThemeOption(Icons.Filled.BrightnessAuto, "Come il sistema", "Segue il tema del telefono", 0)
                     ThemeOption(Icons.Filled.LightMode, "Chiaro", "Sfondo chiaro", 1)
                     ThemeOption(Icons.Filled.DarkMode, "Scuro", "Sfondo scuro, meno affaticamento alla sera", 2)
+                }
+                Page.LOG -> {
+                    var logText by remember { mutableStateOf(AppLog.text()) }
+                    val saveLog = androidx.activity.compose.rememberLauncherForActivityResult(
+                        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("text/plain")
+                    ) { u ->
+                        if (u != null) {
+                            val ok = runCatching { ctx.contentResolver.openOutputStream(u, "wt")!!.use { it.write(AppLog.text().toByteArray()) } }.isSuccess
+                            Toast.makeText(ctx, if (ok) "Registro salvato" else "Salvataggio non riuscito", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    Body("Il registro raccoglie avvio, modelli, passaggi dell'IA generativa (con la RAM libera) ed errori, anche quando l'app viene chiusa dal sistema. Salvalo e mandamelo se qualcosa non funziona.")
+                    Button(onClick = { saveLog.launch("magic-touch-remove-log.txt") }, modifier = Modifier.fillMaxWidth()) { Text("Salva il registro in un file…") }
+                    OutlinedButton(onClick = { logText = AppLog.text() }, modifier = Modifier.fillMaxWidth()) { Text("Aggiorna") }
+                    OutlinedButton(onClick = { AppLog.clear(); logText = "" }, modifier = Modifier.fillMaxWidth()) { Text("Cancella il registro") }
+                    Text(
+                        if (logText.isBlank()) "Registro vuoto." else logText.takeLast(6000),
+                        style = MaterialTheme.typography.bodySmall, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, color = cs.onSurfaceVariant
+                    )
                 }
                 Page.INFO -> {
         Text("Magic Touch Remove", style = MaterialTheme.typography.titleLarge, color = cs.primary)

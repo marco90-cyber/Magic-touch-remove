@@ -249,7 +249,11 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
 object SdDiag {
     var file: File? = null
     var avail: (() -> String)? = null
-    fun mark(stage: String) { runCatching { file?.writeText("$stage\n${avail?.invoke() ?: ""}") } }
+    fun mark(stage: String) {
+        val a = avail?.invoke() ?: ""
+        runCatching { file?.writeText("$stage\n$a") }
+        AppLog.log("IA", "$stage · $a")
+    }
     fun clear() { runCatching { file?.delete() } }
     /** Restituisce il rapporto dell'ultima chiusura anomala (e lo cancella). */
     fun takeCrash(): String? = runCatching {

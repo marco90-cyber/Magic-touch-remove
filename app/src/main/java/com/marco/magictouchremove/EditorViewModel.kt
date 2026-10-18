@@ -109,6 +109,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 refreshHistoryFlags()
                 version++
             } catch (e: Exception) {
+                AppLog.log("ERRORE", "apertura immagine: ${e.stackTraceToString()}")
                 message = "Impossibile aprire l'immagine: ${e.message}"
             } finally {
                 busy = false
@@ -312,6 +313,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                     version++
                 }
             }.onFailure {
+                AppLog.log("IA", "fine con errore: ${it.stackTraceToString()}")
                 message = if (it is java.util.concurrent.CancellationException) "Operazione annullata"
                 else "Errore IA: ${it.message ?: it.javaClass.simpleName}"
             }
@@ -591,6 +593,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 if (onSaved != null) withContext(Dispatchers.Main) { onSaved() }
             } catch (e: Throwable) {
+                AppLog.log("ERRORE", "salvataggio: ${e.stackTraceToString()}")
                 message = "Errore salvataggio: ${e.message ?: e.javaClass.simpleName}"
             } finally {
                 busy = false
