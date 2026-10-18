@@ -67,7 +67,7 @@ def ddim_step(eps, t, n, x):
 def lcm_timesteps(n, original=50):
     origin = np.arange(1, original + 1) * (1000 // original) - 1      # 19, 39, ... 999
     idx = np.floor(np.linspace(0, len(origin), num=n, endpoint=False)).astype(int)
-    return list(origin[::-1][idx]) if False else list(origin[idx][::-1])
+    return [int(v) for v in origin[::-1][idx]]
 
 def lcm_step(eps, t, nxt, x, rng, last):
     a_t = ACP[t]

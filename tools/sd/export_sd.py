@@ -63,8 +63,6 @@ pipe.load_lora_weights("latent-consistency/lcm-lora-sdv1-5")
 pipe.fuse_lora()
 to_fp16(export(UN(pipe.unet), args, "unet_lcm", ["sample", "timestep", "encoder_hidden_states"], ["noise"], dyn), f"{OUT}/sd15_inpaint_lcm_unet_fp16.onnx")
 
-for f in ("vocab.json", "merges.txt"):
-    shutil.copy(os.path.join(pipe.tokenizer.name_or_path if os.path.isdir(pipe.tokenizer.name_or_path) else "", f), OUT) if False else None
 from huggingface_hub import hf_hub_download
 for f in ("vocab.json", "merges.txt"):
     shutil.copy(hf_hub_download(REPO, "tokenizer/" + f), os.path.join(OUT, "clip_" + f))
