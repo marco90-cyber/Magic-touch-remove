@@ -47,7 +47,7 @@ def export(mod, args, name, inn, outn, dyn=None):
 def to_fp16(p32, final):
     t0 = time.time()
     m = onnx.load(p32)
-    m16 = float16.convert_float_to_float16(m, keep_io_types=True, disable_shape_infer=True)
+    m16 = float16.convert_float_to_float16(m, keep_io_types=True, disable_shape_infer=True, op_block_list=list(float16.DEFAULT_OP_BLOCK_LIST) + ["Resize"])
     onnx.save(m16, final)   # un solo file (< 2 GB)
     del m, m16
     for f in os.listdir(TMP):
