@@ -164,7 +164,6 @@ abstract class Inpainter {
     companion object {
         const val SIZE = 512
         /** Testo per l'IA generativa (vuoto = ricostruisci lo sfondo). */
-        @Volatile var prompt: String = ""
         /** Avanzamento per la schermata di attesa (solo IA generativa). */
         @Volatile var onProgress: ((String) -> Unit)? = null
         @Volatile var cancelRequested: Boolean = false

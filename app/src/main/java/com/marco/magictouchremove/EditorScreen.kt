@@ -386,14 +386,6 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
                     SettingSlider("Durezza", vm.hardness, 0f..1f) { vm.hardness = it }
                     SettingSlider("Opacità", vm.maskOpacity, 0.2f..1f) { vm.maskOpacity = it; vm.touch() }
                     SettingSlider("Espansione bordo", vm.expand, 0f..12f) { vm.expand = it }
-                    if (ModelManager.active(ctx, Kind.INPAINT)?.id?.startsWith("sd") == true) {
-                        androidx.compose.material3.OutlinedTextField(
-                            value = vm.prompt, onValueChange = { vm.prompt = it },
-                            label = { Text("Cosa metto al posto? (IA generativa, in inglese)") },
-                            placeholder = { Text("vuoto = ricostruisci lo sfondo (consigliato)") },
-                            singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                        )
-                    }
                 }
             }
         }

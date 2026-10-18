@@ -40,7 +40,7 @@ Tutto gira **sul telefono**: le foto non vengono mai inviate a nessun server.
 - **Cancella** con il tasto dedicato, oppure modalità **AUTO** che parte appena alzi il dito.
 - Più modelli tra cui scegliere, dal più veloce al più creativo (vedi [i modelli](#i-modelli-di-intelligenza-artificiale)).
 - Per la massima precisione l'app ritaglia la zona attorno alla maschera, la ricostruisce a 512×512 e reincolla il risultato sulla foto sostituendo solo i pixel selezionati.
-- **IA generativa** (Stable Diffusion 1.5, sperimentale): ricostruisce lo sfondo con dettagli realistici; puoi anche descrivere cosa mettere al posto.
+- **IA generativa** (Stable Diffusion 1.5, sperimentale): ricostruisce solo lo sfondo con dettagli realistici. Non accetta testo libero, per sicurezza.
 
 **Comodità**
 - **Lente d'ingrandimento** adattiva mentre disegni; zoom e spostamento a due dita, mantenuti quando apri i pannelli.
@@ -85,9 +85,9 @@ Funziona meglio su superfici semplici (asfalto, pavimento, muro, sabbia); su sfo
 
 ### Usare l'IA generativa
 1. In **Impostazioni › Modelli IA** scarica e scegli *Stable Diffusion 1.5* (o la versione *LCM*, più veloce).
-2. Nell'editor apri il pannello **Impostazioni** (icona dei cursori): compare il campo **«Cosa metto al posto?»**.
-3. **Lascialo vuoto** per ricostruire lo sfondo: prima LaMa riempie il buco con uno sfondo coerente, poi Stable Diffusion lo rifinisce con texture e dettaglio, senza inventare oggetti nuovi.
-4. **Scrivi un testo** (meglio in inglese, per esempio `green grass`, `plain white wall`) per generare qualcosa di preciso al posto dell'oggetto.
+2. Seleziona l'oggetto e cancella come al solito: l'IA ricostruisce **solo lo sfondo**. Prima LaMa riempie il buco con uno sfondo coerente, poi Stable Diffusion lo rifinisce con texture e dettaglio, senza inventare oggetti nuovi.
+3. **Non è possibile scrivere un testo** per generare contenuti: è una scelta di sicurezza, per impedire che il modello produca immagini inappropriate (per esempio nudo) a partire dalle foto.
+4. Resta sempre la possibilità di usare LaMa o MI-GAN, che non generano contenuti nuovi.
 5. Un'elaborazione richiede da decine di secondi a qualche minuto; puoi **annullarla**.
 
 ### Salvare la foto
@@ -126,7 +126,7 @@ Note sull'IA generativa:
 
 ## Risoluzione dei problemi e registro eventi
 - **L'app si chiude con l'IA generativa**: succede quando manca memoria (Android chiude l'app). Prova la versione LCM, chiudi le altre app oppure usa LaMa / MI-GAN.
-- **Il risultato inventa un oggetto**: lascia vuoto il campo del testo (modalità «ricostruisci»), oppure aumenta *Pixel in più* per coprire bordi e ombre.
+- **Il risultato inventa un oggetto**: usa un modello non generativo (LaMa o MI-GAN), oppure aumenta *Pixel in più* per coprire bordi e ombre.
 - **Restano ombre o contorni**: usa *Includi ombra* e *Pixel in più*.
 - **Segnalare un problema**: Impostazioni › **Registro eventi** › *Salva il registro in un file…*, poi allega il file a una [issue](https://github.com/marco90-cyber/Magic-touch-remove/issues). Il registro contiene modello del telefono, RAM, passaggi dell'IA ed errori: **nessuna foto**.
 

@@ -58,8 +58,6 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     var canRedo by mutableStateOf(false); private set
     var message by mutableStateOf<String?>(null)
     var comparing by mutableStateOf(false)
-    /** Testo per l'IA generativa (vuoto = ricostruisci lo sfondo). */
-    var prompt by mutableStateOf("")
     /** True mentre lavora l'IA generativa (lenta): mostra il tasto Annulla. */
     var busyCancelable by mutableStateOf(false); private set
     fun cancelBusy() { Inpainter.cancelRequested = true }
@@ -298,7 +296,6 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         busy = true
         busyCancelable = generative
         busyText = if (generative) "IA generativa… può richiedere diversi minuti" else "Rimozione in corso…"
-        Inpainter.prompt = prompt
         Inpainter.cancelRequested = false
         Inpainter.onProgress = if (generative) ({ s: String -> busyText = s }) else null
         viewModelScope.launch {

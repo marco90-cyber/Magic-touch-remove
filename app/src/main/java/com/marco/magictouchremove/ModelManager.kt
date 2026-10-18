@@ -90,7 +90,7 @@ private val SD_SHARED = listOf(SD_TE, SD_VE, SD_VD, SD_VOCAB, SD_MERGES)
 
 val OPT_SD = ModelOption(
     "sd15", Kind.INPAINT, "Stable Diffusion 1.5 · Generativo", "Il più creativo · sperimentale",
-    "IA generativa a diffusione: inventa contenuti realistici per ricostruire aree grandi o complesse e accetta un testo (es. «erba»). " +
+    "IA generativa a diffusione: ricostruisce lo sfondo con dettagli realistici in aree grandi o complesse (non si può scrivere un testo: serve solo a rifinire lo sfondo). " +
         "Molto pesante (~2 GB) e lenta: serve un telefono con NPU e molta RAM (almeno 8 GB). Non è il modello predefinito.",
     listOf("Generativo", "Sperimentale", "Richiede NPU", "Molto pesante"),
     SD_SHARED + SD_UNET, "CreativeML OpenRAIL-M",

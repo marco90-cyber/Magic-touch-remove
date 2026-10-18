@@ -127,13 +127,12 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
         checkCancel()
         progress("IA generativa · preparazione del testo…")
         val tok = ClipTokenizer(File(path("clip_vocab.json")).readText(), File(path("clip_merges.txt")).readText())
-        // testo vuoto = «ricostruisci lo sfondo»: si parte dal riempimento di LaMa e si rifinisce; con un testo si genera da zero
-        val userText = Inpainter.prompt.trim()
-        val rebuild = userText.isEmpty()
-        val text = if (rebuild) "empty background, seamless natural continuation of the surrounding scene, no objects" else userText
+        // Nessun testo libero (scelta di sicurezza): l'IA può solo ricostruire lo sfondo. Si parte dal riempimento di LaMa e si rifinisce.
+        val rebuild = true
+        val text = "empty background, seamless natural continuation of the surrounding scene, no objects"
         val (cond, unc) = session("sd15_text_encoder_fp16.onnx").use { s ->
             val c = embed(s, tok, text)
-            c to (if (!lcm) embed(s, tok, "object, person, animal, text, logo, watermark, blurry") else null)
+            c to (if (!lcm) embed(s, tok, "object, person, animal, text, logo, watermark, blurry, nude, naked, nsfw, explicit") else null)
         }
 
         // immagine con il buco azzerato → latente
