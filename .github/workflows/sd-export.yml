@@ -21,17 +21,20 @@ jobs:
           df -h /
       - name: Install
         run: |
-          pip install --index-url https://download.pytorch.org/whl/cpu torch==2.4.1
-          pip install "numpy<2" diffusers==0.30.3 transformers==4.44.2 peft==0.12.0 accelerate==0.34.2 \
-            huggingface_hub==0.25.2 safetensors onnx==1.16.2 onnxruntime==1.19.2 onnxconverter-common==1.14.0 \
-            scikit-image pillow protobuf==4.25.3
+          set -o pipefail
+          {
+            pip install --index-url https://download.pytorch.org/whl/cpu torch==2.4.1
+            pip install "numpy<2" diffusers==0.30.3 transformers==4.44.2 peft==0.12.0 accelerate==0.34.2 \
+              huggingface_hub==0.25.2 safetensors onnx==1.16.2 onnxruntime==1.19.2 onnxconverter-common==1.14.0 \
+              scikit-image pillow
+          } 2>&1 | tee install.log || { tail -n 25 install.log | while IFS= read -r l; do echo "::error::${l}"; done; exit 1; }
       - name: Export and verify
         working-directory: tools/sd
         run: python export_sd.py "$GITHUB_WORKSPACE/out" 2>&1 | tee "$GITHUB_WORKSPACE/export.log"
       - name: Show log tail as annotation
         if: always()
         run: |
-          tail -n 30 export.log | while IFS= read -r l; do echo "::notice::${l}"; done
+          tail -n 30 export.log 2>/dev/null | while IFS= read -r l; do echo "::notice::${l}"; done
       - name: Publish release sd-v1
         env:
           GH_TOKEN: ${{ github.token }}
