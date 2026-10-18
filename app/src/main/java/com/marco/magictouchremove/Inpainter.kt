@@ -166,6 +166,8 @@ abstract class Inpainter {
         /** Testo per l'IA generativa (vuoto = ricostruisci lo sfondo). */
         /** Avanzamento per la schermata di attesa (solo IA generativa). */
         @Volatile var onProgress: ((String) -> Unit)? = null
+        /** Avviso da mostrare dopo l'elaborazione (es. risultato scartato dal controllo di sicurezza). */
+        @Volatile var notice: String? = null
         @Volatile var cancelRequested: Boolean = false
         @Volatile private var instance: Inpainter? = null
         @Volatile private var instanceId: String? = null

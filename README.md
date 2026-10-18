@@ -56,7 +56,7 @@ Tutto gira **sul telefono**: le foto non vengono mai inviate a nessun server.
 2. Aprilo sul telefono e consenti l'installazione da questa fonte, se Android lo chiede.
 3. Al primo avvio l'app propone di scaricare un modello IA (serve la connessione; poi tutto funziona offline).
 
-**Requisiti**: Android 10 o superiore (API 29), processore a 64 bit (arm64). Per l'IA generativa servono inoltre almeno **8 GB di RAM**, circa 2 GB di spazio libero e un telefono potente (vedi sotto).
+**Requisiti**: Android 10 o superiore (API 29), processore a 64 bit (arm64). Per l'IA generativa servono inoltre almeno **8 GB di RAM**, circa 2,5 GB di spazio libero e un telefono potente (vedi sotto).
 
 Gli aggiornamenti successivi si installano dall'app (Impostazioni › Aggiornamenti): modelli e impostazioni restano.
 
@@ -87,8 +87,9 @@ Funziona meglio su superfici semplici (asfalto, pavimento, muro, sabbia); su sfo
 1. In **Impostazioni › Modelli IA** scarica e scegli *Stable Diffusion 1.5* (o la versione *LCM*, più veloce).
 2. Seleziona l'oggetto e cancella come al solito: l'IA ricostruisce **solo lo sfondo**. Prima LaMa riempie il buco con uno sfondo coerente, poi Stable Diffusion lo rifinisce con texture e dettaglio, senza inventare oggetti nuovi.
 3. **Non è possibile scrivere un testo** per generare contenuti: è una scelta di sicurezza, per impedire che il modello produca immagini inappropriate (per esempio nudo) a partire dalle foto.
-4. Resta sempre la possibilità di usare LaMa o MI-GAN, che non generano contenuti nuovi.
-5. Un'elaborazione richiede da decine di secondi a qualche minuto; puoi **annullarla**.
+4. Ogni risultato passa da un **controllo di sicurezza** sul telefono (un classificatore di immagini): se sembra inappropriato viene scartato e l'app usa il riempimento standard di LaMa. In caso di dubbio o errore scarta comunque.
+5. Resta sempre la possibilità di usare LaMa o MI-GAN, che non generano contenuti nuovi.
+6. Un'elaborazione richiede da decine di secondi a qualche minuto; puoi **annullarla**.
 
 ### Salvare la foto
 Tocca l'icona di salvataggio in alto e scegli **cartella, formato, qualità e dimensione**. L'app salva alla risoluzione dell'originale lasciando intatti i pixel che non hai modificato.
@@ -109,8 +110,8 @@ I modelli non sono nell'APK: si scaricano dall'app (con verifica SHA-256) e si p
 | **MI-GAN** | Rimozione oggetti | ~28 MB | Molto leggero e veloce. |
 | **MobileSAM** | Selezione automatica | ~45 MB | Veloce, ideale per iniziare. |
 | **SAM 2 Tiny** | Selezione automatica | ~155 MB | Più preciso sui bordi, più lento. |
-| **Stable Diffusion 1.5 Inpainting** | IA generativa | ~2,1 GB | Sperimentale. Richiede un telefono potente (≥ 8 GB di RAM). |
-| **Stable Diffusion 1.5 LCM** | IA generativa veloce | ~2,1 GB | Sperimentale. 4 passaggi invece di 20, qualità leggermente inferiore. |
+| **Stable Diffusion 1.5 Inpainting** | IA generativa | ~2,4 GB | Sperimentale. Richiede un telefono potente (≥ 8 GB di RAM). |
+| **Stable Diffusion 1.5 LCM** | IA generativa veloce | ~2,4 GB | Sperimentale. 4 passaggi invece di 20, qualità leggermente inferiore. |
 
 Note sull'IA generativa:
 - È **sperimentale**: non è il modello predefinito, e i tempi dipendono molto dal telefono.
@@ -136,9 +137,9 @@ Ogni push su `main` compila l'APK con GitHub Actions (`.github/workflows/build.y
 L'app controlla all'avvio l'ultima Release e, se c'è una versione più nuova, mostra «Nuova versione disponibile». L'APK si scarica, poi Android chiede conferma e lo installa sopra quello esistente.
 Perché funzioni **tutte le build devono essere firmate con la stessa chiave**: la chiave sta nel segreto GitHub `KEYSTORE_BASE64` (Settings › Secrets and variables › Actions). Senza il segreto la build parte comunque ma non pubblica la Release. Chi copia il progetto (fork) usa la propria chiave e ottiene un'app separata.
 
-Le Release `model-v1`, `sam-v1`, `sam2-v1`, `migan-v1`, `sd-v1` contengono i modelli che l'app scarica: **non vanno cancellate**.
+Le Release `model-v1`, `sam-v1`, `sam2-v1`, `migan-v1`, `sd-v1`, `nsfw-v1` contengono i modelli che l'app scarica: **non vanno cancellate**.
 
-Gli script per riconvertire Stable Diffusion in ONNX sono in [`tools/sd`](tools/sd).
+Gli script per riconvertire Stable Diffusion e il classificatore di sicurezza in ONNX sono in [`tools/sd`](tools/sd) e [`tools/nsfw`](tools/nsfw).
 
 ## Aggiornare i modelli
 L'app legge `models.json` (nella radice del repository) all'avvio e dalle impostazioni: se un modello ha una `version` più alta di quella installata propone «Aggiorna modelli» (verifica SHA-256, ignora aggiornamenti con `minApp` superiore alla versione dell'app).
@@ -157,6 +158,7 @@ I modelli e le librerie di terze parti hanno **licenze proprie**, che restano va
 | SAM 2 (Hiera Tiny) | Apache-2.0 | [facebookresearch/sam2](https://github.com/facebookresearch/sam2), [vietanhdev/segment-anything-2-onnx-models](https://huggingface.co/vietanhdev/segment-anything-2-onnx-models) |
 | Stable Diffusion 1.5 Inpainting | CreativeML OpenRAIL-M | [stable-diffusion-v1-5/stable-diffusion-inpainting](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-inpainting) |
 | LCM-LoRA (versione veloce) | OpenRAIL++ | [latent-consistency/lcm-lora-sdv1-5](https://huggingface.co/latent-consistency/lcm-lora-sdv1-5) |
+| Falconsai/nsfw_image_detection (controllo di sicurezza) | Apache-2.0 | [Falconsai/nsfw_image_detection](https://huggingface.co/Falconsai/nsfw_image_detection) |
 | ONNX Runtime | MIT | [microsoft/onnxruntime](https://github.com/microsoft/onnxruntime) |
 | Jetpack Compose / AndroidX | Apache-2.0 | [developer.android.com](https://developer.android.com/jetpack) |
 

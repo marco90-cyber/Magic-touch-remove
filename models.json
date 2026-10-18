@@ -143,6 +143,17 @@
       "urls": [
         "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/sd-v1/sd15_inpaint_lcm_unet_fp16.onnx"
       ]
+    },
+    {
+      "file": "nsfw_vit_fp32.onnx",
+      "version": 1,
+      "minApp": 1,
+      "size": 343463984,
+      "sha256": "65b6603fdccda3f736dccfc0a05f814e6b6da86eee30dc7cff2fc0fd0a0d3fc8",
+      "notes": "",
+      "urls": [
+        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/nsfw-v1/nsfw_vit_fp32.onnx"
+      ]
     }
   ]
 }

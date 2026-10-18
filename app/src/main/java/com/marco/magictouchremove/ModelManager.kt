@@ -86,12 +86,13 @@ private val SD_VOCAB = ModelFile("clip_vocab.json", 1_059_962L, 1_000_000L, list
 private val SD_MERGES = ModelFile("clip_merges.txt", 524_619L, 500_000L, listOf("$REPO/sd-v1/clip_merges.txt"))
 private val SD_UNET = ModelFile("sd15_inpaint_unet_fp16.onnx", 1_720_761_519L, 1_700_000_000L, listOf("$REPO/sd-v1/sd15_inpaint_unet_fp16.onnx"))
 private val SD_UNET_LCM = ModelFile("sd15_inpaint_lcm_unet_fp16.onnx", 1_720_783_260L, 1_700_000_000L, listOf("$REPO/sd-v1/sd15_inpaint_lcm_unet_fp16.onnx"))
-private val SD_SHARED = listOf(SD_TE, SD_VE, SD_VD, SD_VOCAB, SD_MERGES)
+private val SD_NSFW = ModelFile("nsfw_vit_fp32.onnx", 343_463_984L, 340_000_000L, listOf("$REPO/nsfw-v1/nsfw_vit_fp32.onnx"))
+private val SD_SHARED = listOf(SD_TE, SD_VE, SD_VD, SD_VOCAB, SD_MERGES, SD_NSFW)
 
 val OPT_SD = ModelOption(
     "sd15", Kind.INPAINT, "Stable Diffusion 1.5 · Generativo", "Il più creativo · sperimentale",
-    "IA generativa a diffusione: ricostruisce lo sfondo con dettagli realistici in aree grandi o complesse (non si può scrivere un testo: serve solo a rifinire lo sfondo). " +
-        "Molto pesante (~2 GB) e lenta: serve un telefono con NPU e molta RAM (almeno 8 GB). Non è il modello predefinito.",
+    "IA generativa a diffusione: ricostruisce lo sfondo con dettagli realistici in aree grandi o complesse (non si può scrivere un testo) e controlla che il risultato sia appropriato. " +
+        "Molto pesante (~2,4 GB) e lenta: serve un telefono con NPU e molta RAM (almeno 8 GB). Non è il modello predefinito.",
     listOf("Generativo", "Sperimentale", "Richiede NPU", "Molto pesante"),
     SD_SHARED + SD_UNET, "CreativeML OpenRAIL-M",
     "huggingface.co/stable-diffusion-v1-5/stable-diffusion-inpainting", "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-inpainting", "sd-v1"
@@ -99,7 +100,7 @@ val OPT_SD = ModelOption(
 val OPT_SDLCM = ModelOption(
     "sd15lcm", Kind.INPAINT, "Stable Diffusion 1.5 LCM · Generativo veloce", "Generativo più rapido · sperimentale",
     "Stessa IA generativa ma ottimizzata a 4 passaggi (LCM): molto più rapida di quella standard, con qualità leggermente inferiore. " +
-        "Pesante (~2 GB): serve un telefono con NPU e molta RAM (almeno 8 GB). Non è il modello predefinito.",
+        "Pesante (~2,4 GB): serve un telefono con NPU e molta RAM (almeno 8 GB). Non è il modello predefinito.",
     listOf("Generativo", "Sperimentale", "Richiede NPU", "Più veloce del generativo standard"),
     SD_SHARED + SD_UNET_LCM, "CreativeML OpenRAIL-M + OpenRAIL++ (LCM-LoRA)",
     "huggingface.co/latent-consistency/lcm-lora-sdv1-5", "https://huggingface.co/latent-consistency/lcm-lora-sdv1-5", "sd-v1"

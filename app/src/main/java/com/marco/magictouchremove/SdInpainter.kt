@@ -90,6 +90,7 @@ class ClipTokenizer(vocabJson: String, mergesText: String) {
  */
 class SdInpainter(private val paths: Map<String, String>, private val lcm: Boolean, private val npu: Boolean, private val lamaPath: String? = null) : Inpainter() {
 
+    private val NSFW_LIMIT = 0.30f
     private fun path(name: String) = paths[name] ?: error("file mancante: $name")
     private val unetName = if (lcm) "sd15_inpaint_lcm_unet_fp16.onnx" else "sd15_inpaint_unet_fp16.onnx"
 
@@ -277,7 +278,43 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
                 }
             }
         }
+
+        // Controllo di sicurezza: se il risultato sembra inappropriato lo scarta (in caso di dubbio o errore scarta comunque).
+        checkCancel()
+        progress("IA generativa · controllo di sicurezza…")
+        val score = runCatching { nsfwScore(out, n) }
+            .onFailure { AppLog.log("IA", "controllo di sicurezza non riuscito: ${it.message}") }
+            .getOrDefault(1f)
+        AppLog.log("IA", "controllo di sicurezza: punteggio ${"%.3f".format(score)}")
+        if (score >= NSFW_LIMIT) {
+            Inpainter.notice = "Risultato dell'IA generativa scartato dal controllo di sicurezza: usato il riempimento standard."
+            return base ?: throw IllegalStateException("Risultato scartato dal controllo di sicurezza")
+        }
         return out
+    }
+
+    /** Probabilità (0..1) che l'immagine sia inappropriata: ViT Falconsai/nsfw_image_detection (Apache-2.0), classi {0: normal, 1: nsfw}. */
+    private fun nsfwScore(px: IntArray, n: Int): Float {
+        val bmp = android.graphics.Bitmap.createBitmap(px, n, n, android.graphics.Bitmap.Config.ARGB_8888)
+        val small = android.graphics.Bitmap.createScaledBitmap(bmp, 224, 224, true)
+        val q = IntArray(224 * 224); small.getPixels(q, 0, 224, 0, 0, 224, 224)
+        val f = FloatArray(3 * 224 * 224)
+        for (i in q.indices) {
+            f[i] = (((q[i] shr 16) and 255) / 255f - 0.5f) / 0.5f
+            f[224 * 224 + i] = (((q[i] shr 8) and 255) / 255f - 0.5f) / 0.5f
+            f[2 * 224 * 224 + i] = ((q[i] and 255) / 255f - 0.5f) / 0.5f
+        }
+        return session("nsfw_vit_fp32.onnx").use { s ->
+            OnnxTensor.createTensor(env, FloatBuffer.wrap(f), longArrayOf(1, 3, 224, 224)).use { t ->
+                s.run(mapOf(s.inputNames.first() to t)).use { r ->
+                    val fb = (r[0] as OnnxTensor).floatBuffer
+                    val a = fb.get(0); val b = fb.get(1)
+                    val m = maxOf(a, b)
+                    val ea = kotlin.math.exp(a - m); val eb = kotlin.math.exp(b - m)
+                    eb / (ea + eb)
+                }
+            }
+        }
     }
 
     override fun close() {}

@@ -297,6 +297,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         busyCancelable = generative
         busyText = if (generative) "IA generativa… può richiedere diversi minuti" else "Rimozione in corso…"
         Inpainter.cancelRequested = false
+        Inpainter.notice = null
         Inpainter.onProgress = if (generative) ({ s: String -> busyText = s }) else null
         viewModelScope.launch {
             val res = withContext(Dispatchers.Default) {
@@ -311,6 +312,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                     mask = Bitmap.createBitmap(out.width, out.height, Bitmap.Config.ALPHA_8)
                     hasMask = false
                     version++
+                    Inpainter.notice?.let { message = it; Inpainter.notice = null }
                 }
             }.onFailure {
                 AppLog.log("IA", "fine con errore: ${it.stackTraceToString()}")
