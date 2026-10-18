@@ -79,13 +79,13 @@ val OPT_SAM2 = ModelOption(
     "Apache-2.0", "huggingface.co/vietanhdev/segment-anything-2-onnx-models", "https://huggingface.co/vietanhdev/segment-anything-2-onnx-models", "sam2-v1"
 )
 // --- IA generativa (Stable Diffusion 1.5 Inpainting, sperimentale) ---
-private val SD_TE = ModelFile("sd15_text_encoder_fp16.onnx", 246_000_000L, 200_000_000L, listOf("$REPO/sd-v1/sd15_text_encoder_fp16.onnx"))
-private val SD_VE = ModelFile("sd15_vae_encoder_fp16.onnx", 68_000_000L, 55_000_000L, listOf("$REPO/sd-v1/sd15_vae_encoder_fp16.onnx"))
-private val SD_VD = ModelFile("sd15_vae_decoder_fp16.onnx", 99_000_000L, 80_000_000L, listOf("$REPO/sd-v1/sd15_vae_decoder_fp16.onnx"))
-private val SD_VOCAB = ModelFile("clip_vocab.json", 1_000_000L, 500_000L, listOf("$REPO/sd-v1/clip_vocab.json"))
-private val SD_MERGES = ModelFile("clip_merges.txt", 524_000L, 400_000L, listOf("$REPO/sd-v1/clip_merges.txt"))
-private val SD_UNET = ModelFile("sd15_inpaint_unet_fp16.onnx", 1_720_000_000L, 1_500_000_000L, listOf("$REPO/sd-v1/sd15_inpaint_unet_fp16.onnx"))
-private val SD_UNET_LCM = ModelFile("sd15_inpaint_lcm_unet_fp16.onnx", 1_720_000_000L, 1_500_000_000L, listOf("$REPO/sd-v1/sd15_inpaint_lcm_unet_fp16.onnx"))
+private val SD_TE = ModelFile("sd15_text_encoder_fp16.onnx", 246_282_313L, 240_000_000L, listOf("$REPO/sd-v1/sd15_text_encoder_fp16.onnx"))
+private val SD_VE = ModelFile("sd15_vae_encoder.onnx", 136_773_223L, 130_000_000L, listOf("$REPO/sd-v1/sd15_vae_encoder.onnx"))
+private val SD_VD = ModelFile("sd15_vae_decoder.onnx", 265_178_078L, 250_000_000L, listOf("$REPO/sd-v1/sd15_vae_decoder.onnx"))
+private val SD_VOCAB = ModelFile("clip_vocab.json", 1_059_962L, 1_000_000L, listOf("$REPO/sd-v1/clip_vocab.json"))
+private val SD_MERGES = ModelFile("clip_merges.txt", 524_619L, 500_000L, listOf("$REPO/sd-v1/clip_merges.txt"))
+private val SD_UNET = ModelFile("sd15_inpaint_unet_fp16.onnx", 1_720_761_519L, 1_700_000_000L, listOf("$REPO/sd-v1/sd15_inpaint_unet_fp16.onnx"))
+private val SD_UNET_LCM = ModelFile("sd15_inpaint_lcm_unet_fp16.onnx", 1_720_783_260L, 1_700_000_000L, listOf("$REPO/sd-v1/sd15_inpaint_lcm_unet_fp16.onnx"))
 private val SD_SHARED = listOf(SD_TE, SD_VE, SD_VD, SD_VOCAB, SD_MERGES)
 
 val OPT_SD = ModelOption(

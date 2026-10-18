@@ -138,7 +138,7 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
             img[plane + i] = ((p shr 8) and 255) / 127.5f - 1f
             img[2 * plane + i] = (p and 255) / 127.5f - 1f
         }
-        val ml = session("sd15_vae_encoder_fp16.onnx").use { s ->
+        val ml = session("sd15_vae_encoder.onnx").use { s ->
             OnnxTensor.createTensor(env, FloatBuffer.wrap(img), longArrayOf(1, 3, n.toLong(), n.toLong())).use { t ->
                 s.run(mapOf(s.inputNames.first() to t)).use { r ->
                     val fb = (r[0] as OnnxTensor).floatBuffer
@@ -219,7 +219,7 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
         checkCancel()
         progress("IA generativa · ricostruzione dell'immagine…")
         val out = IntArray(plane)
-        session("sd15_vae_decoder_fp16.onnx").use { s ->
+        session("sd15_vae_decoder.onnx").use { s ->
             OnnxTensor.createTensor(env, FloatBuffer.wrap(x), longArrayOf(1, 4, lat.toLong(), lat.toLong())).use { t ->
                 s.run(mapOf(s.inputNames.first() to t)).use { r ->
                     val fb = (r[0] as OnnxTensor).floatBuffer
