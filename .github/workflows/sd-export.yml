@@ -33,11 +33,14 @@ jobs:
         run: |
           set -o pipefail
           python -W ignore export_sd.py "$GITHUB_WORKSPACE/out" 2>&1 | tee "$GITHUB_WORKSPACE/export.log"
-      - name: Show log tail as annotation
+      - name: Upload log
         if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          msg=$(grep -v "UserWarning\|warnings.warn" export.log 2>/dev/null | tail -n 40 | cut -c1-300 | sed ':a;N;$!ba;s/\n/%0A/g')
-          echo "::notice title=export log::${msg}"
+          grep -v "UserWarning\|warnings.warn" export.log > export-clean.log 2>/dev/null || true
+          gh release delete sd-log --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          gh release create sd-log export-clean.log --repo "$GITHUB_REPOSITORY" --prerelease --latest=false --title "log" --notes "log" || true
       - name: Publish release sd-v1
         env:
           GH_TOKEN: ${{ github.token }}
