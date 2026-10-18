@@ -46,7 +46,7 @@ Tutto gira **sul telefono**: le foto non vengono mai inviate a nessun server.
 **Comodità**
 - **Lente d'ingrandimento** adattiva mentre disegni; zoom e spostamento a due dita, mantenuti quando apri i pannelli.
 - Tieni premuto su **Pennello** o **Gomma** per cambiare la dimensione con un'anteprima; tieni premuto su **Selezione** per le opzioni di selezione.
-- **Annulla / Ripeti** senza limiti pratici, **confronto** con la foto originale.
+- **Annulla / Ripeti** e **confronto** con la foto originale.
 - **Salvataggio a piena risoluzione**: la foto originale resta intatta, solo le zone modificate vengono sostituite. Scegli cartella, formato (JPEG / PNG / WebP), qualità (80–100) e dimensione; vedi la stima del peso del file.
 - Tema **chiaro / scuro / come il sistema**.
 - **Aggiornamenti** dell'app e dei modelli direttamente dall'app.
