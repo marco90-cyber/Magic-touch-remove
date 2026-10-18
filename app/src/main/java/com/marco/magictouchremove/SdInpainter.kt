@@ -149,11 +149,12 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
         }
         // base: riempimento di LaMa (solo se si ricostruisce lo sfondo e LaMa è scaricato)
         var base: IntArray? = null
-        if (rebuild && lamaPath != null) {
+        val lp = lamaPath
+        if (rebuild && lp != null) {
             progress("IA generativa · sfondo di base…")
             base = runCatching {
-                val l = LamaInpainter(lamaPath)
-                try { l.run512(px, hole, n) } finally { l.close() }
+                val l = LamaInpainter(lp)
+                try { l.fill(px, hole, n) } finally { l.shut() }
             }.onFailure { AppLog.log("IA", "base LaMa non riuscita: ${it.message}") }.getOrNull()
         }
         fun encode(s: OrtSession, data: FloatArray): FloatArray =

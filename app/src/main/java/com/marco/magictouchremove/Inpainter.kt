@@ -208,6 +208,9 @@ internal class LamaInpainter(path: String) : Inpainter() {
         maskInput = names.firstOrNull { it.contains("mask", true) } ?: names[1]
     }
 
+    fun fill(px: IntArray, hole: BooleanArray, n: Int): IntArray = run512(px, hole, n)
+    fun shut() = close()
+
     override fun run512(px: IntArray, hole: BooleanArray, n: Int): IntArray {
         val plane = n * n
         val imgArr = FloatArray(3 * plane)
