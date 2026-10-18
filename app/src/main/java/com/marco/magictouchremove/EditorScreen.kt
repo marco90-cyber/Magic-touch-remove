@@ -346,6 +346,7 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
                         Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator()
                             Text(vm.busyText, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
+                            if (vm.busyCancelable) androidx.compose.material3.TextButton(onClick = { vm.cancelBusy() }) { Text("Annulla") }
                         }
                     }
                 }
@@ -384,6 +385,14 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
                     SettingSlider("Durezza", vm.hardness, 0f..1f) { vm.hardness = it }
                     SettingSlider("Opacità", vm.maskOpacity, 0.2f..1f) { vm.maskOpacity = it; vm.touch() }
                     SettingSlider("Espansione bordo", vm.expand, 0f..12f) { vm.expand = it }
+                    if (ModelManager.active(ctx, Kind.INPAINT)?.id?.startsWith("sd") == true) {
+                        androidx.compose.material3.OutlinedTextField(
+                            value = vm.prompt, onValueChange = { vm.prompt = it },
+                            label = { Text("Cosa metto al posto? (IA generativa, in inglese)") },
+                            placeholder = { Text("vuoto = ricostruisci lo sfondo") },
+                            singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                        )
+                    }
                 }
             }
         }

@@ -58,6 +58,11 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     var canRedo by mutableStateOf(false); private set
     var message by mutableStateOf<String?>(null)
     var comparing by mutableStateOf(false)
+    /** Testo per l'IA generativa (vuoto = ricostruisci lo sfondo). */
+    var prompt by mutableStateOf("")
+    /** True mentre lavora l'IA generativa (lenta): mostra il tasto Annulla. */
+    var busyCancelable by mutableStateOf(false); private set
+    fun cancelBusy() { Inpainter.cancelRequested = true }
     /** Pixel in più rispetto al bordo della selezione automatica (0/5/10/15). */
     var selExtra by mutableIntStateOf(0); private set
     /** Durezza della selezione: 1 = bordo netto; meno = il riempimento si fonde in modo graduale con la foto. */
@@ -285,8 +290,13 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             message = "Scarica prima il modello IA dalla schermata iniziale"
             return
         }
+        val generative = ModelManager.active(ctx, Kind.INPAINT)?.id?.startsWith("sd") == true
         busy = true
-        busyText = "Rimozione in corso…"
+        busyCancelable = generative
+        busyText = if (generative) "IA generativa… può richiedere diversi minuti" else "Rimozione in corso…"
+        Inpainter.prompt = prompt
+        Inpainter.cancelRequested = false
+        Inpainter.onProgress = if (generative) ({ s: String -> busyText = s }) else null
         viewModelScope.launch {
             val res = withContext(Dispatchers.Default) {
                 runCatching { Inpainter.get(ctx).inpaint(img, mk, expand.roundToInt(), ((1f - selSoft) * 10f).roundToInt()) }
@@ -301,7 +311,12 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                     hasMask = false
                     version++
                 }
-            }.onFailure { message = "Errore IA: ${it.message ?: it.javaClass.simpleName}" }
+            }.onFailure {
+                message = if (it is java.util.concurrent.CancellationException) "Operazione annullata"
+                else "Errore IA: ${it.message ?: it.javaClass.simpleName}"
+            }
+            Inpainter.onProgress = null
+            busyCancelable = false
             busy = false
             if (tool == Tool.SELECT && image != null) prepareSegmenter(quiet = true)
         }

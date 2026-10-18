@@ -96,7 +96,7 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
     val appState by AppUpdater.state.collectAsStateWithLifecycle()
     // rev e remote letti qui: ogni modifica ai modelli ricompone la schermata
     val hasUpdate = rev >= 0 && remote.size >= 0 && ModelManager.updateAvailable(ctx)
-    val total = ALL_OPTIONS.sumOf { ModelManager.installedSize(ctx, it) }
+    val total = ModelManager.totalInstalledSize(ctx)
     var confirmDelete by remember { mutableStateOf(false) }
     var deleteOne by remember { mutableStateOf<ModelOption?>(null) }
     var showChooser by remember { mutableStateOf(false) }

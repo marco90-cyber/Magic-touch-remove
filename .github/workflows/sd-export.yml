@@ -30,11 +30,13 @@ jobs:
           } 2>&1 | tee install.log || { tail -n 25 install.log | while IFS= read -r l; do echo "::error::${l}"; done; exit 1; }
       - name: Export and verify
         working-directory: tools/sd
-        run: python export_sd.py "$GITHUB_WORKSPACE/out" 2>&1 | tee "$GITHUB_WORKSPACE/export.log"
+        run: |
+          set -o pipefail
+          python export_sd.py "$GITHUB_WORKSPACE/out" 2>&1 | tee "$GITHUB_WORKSPACE/export.log"
       - name: Show log tail as annotation
         if: always()
         run: |
-          tail -n 30 export.log 2>/dev/null | while IFS= read -r l; do echo "::notice::${l}"; done
+          tail -n 45 export.log 2>/dev/null | while IFS= read -r l; do echo "::notice::${l}"; done
       - name: Publish release sd-v1
         env:
           GH_TOKEN: ${{ github.token }}

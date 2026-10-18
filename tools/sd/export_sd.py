@@ -16,6 +16,11 @@ def log(*a):
 
 pipe = StableDiffusionInpaintPipeline.from_pretrained(REPO, torch_dtype=torch.float32, variant="fp16", safety_checker=None, feature_extractor=None, requires_safety_checker=False)
 pipe.to("cpu")
+from diffusers.models.attention_processor import AttnProcessor
+from transformers import CLIPTextModel
+pipe.unet.set_attn_processor(AttnProcessor())      # niente scaled_dot_product_attention: l'esportazione ONNX non la gestisce bene
+pipe.vae.set_attn_processor(AttnProcessor())
+pipe.text_encoder = CLIPTextModel.from_pretrained(REPO, subfolder="text_encoder", torch_dtype=torch.float32, variant="fp16", attn_implementation="eager")
 
 class TE(torch.nn.Module):
     def __init__(s, m): super().__init__(); s.m = m

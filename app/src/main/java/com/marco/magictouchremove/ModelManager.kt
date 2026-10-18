@@ -78,8 +78,34 @@ val OPT_SAM2 = ModelOption(
     ),
     "Apache-2.0", "huggingface.co/vietanhdev/segment-anything-2-onnx-models", "https://huggingface.co/vietanhdev/segment-anything-2-onnx-models", "sam2-v1"
 )
-val ALL_OPTIONS = listOf(OPT_LAMA, OPT_MIGAN, OPT_MOBILESAM, OPT_SAM2)
-private val ALL = ALL_OPTIONS.flatMap { it.files }
+// --- IA generativa (Stable Diffusion 1.5 Inpainting, sperimentale) ---
+private val SD_TE = ModelFile("sd15_text_encoder_fp16.onnx", 246_000_000L, 200_000_000L, listOf("$REPO/sd-v1/sd15_text_encoder_fp16.onnx"))
+private val SD_VE = ModelFile("sd15_vae_encoder_fp16.onnx", 68_000_000L, 55_000_000L, listOf("$REPO/sd-v1/sd15_vae_encoder_fp16.onnx"))
+private val SD_VD = ModelFile("sd15_vae_decoder_fp16.onnx", 99_000_000L, 80_000_000L, listOf("$REPO/sd-v1/sd15_vae_decoder_fp16.onnx"))
+private val SD_VOCAB = ModelFile("clip_vocab.json", 1_000_000L, 500_000L, listOf("$REPO/sd-v1/clip_vocab.json"))
+private val SD_MERGES = ModelFile("clip_merges.txt", 524_000L, 400_000L, listOf("$REPO/sd-v1/clip_merges.txt"))
+private val SD_UNET = ModelFile("sd15_inpaint_unet_fp16.onnx", 1_720_000_000L, 1_500_000_000L, listOf("$REPO/sd-v1/sd15_inpaint_unet_fp16.onnx"))
+private val SD_UNET_LCM = ModelFile("sd15_inpaint_lcm_unet_fp16.onnx", 1_720_000_000L, 1_500_000_000L, listOf("$REPO/sd-v1/sd15_inpaint_lcm_unet_fp16.onnx"))
+private val SD_SHARED = listOf(SD_TE, SD_VE, SD_VD, SD_VOCAB, SD_MERGES)
+
+val OPT_SD = ModelOption(
+    "sd15", Kind.INPAINT, "Stable Diffusion 1.5 · Generativo", "Il più creativo · sperimentale",
+    "IA generativa a diffusione: inventa contenuti realistici per ricostruire aree grandi o complesse e accetta un testo (es. «erba»). " +
+        "Molto pesante (~2 GB) e lenta: serve un telefono con NPU e molta RAM (almeno 8 GB). Non è il modello predefinito.",
+    listOf("Generativo", "Sperimentale", "Richiede NPU", "Molto pesante"),
+    SD_SHARED + SD_UNET, "CreativeML OpenRAIL-M",
+    "huggingface.co/stable-diffusion-v1-5/stable-diffusion-inpainting", "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-inpainting", "sd-v1"
+)
+val OPT_SDLCM = ModelOption(
+    "sd15lcm", Kind.INPAINT, "Stable Diffusion 1.5 LCM · Generativo veloce", "Generativo più rapido · sperimentale",
+    "Stessa IA generativa ma ottimizzata a 4 passaggi (LCM): molto più rapida di quella standard, con qualità leggermente inferiore. " +
+        "Pesante (~2 GB): serve un telefono con NPU e molta RAM (almeno 8 GB). Non è il modello predefinito.",
+    listOf("Generativo", "Sperimentale", "Richiede NPU", "Più veloce del generativo standard"),
+    SD_SHARED + SD_UNET_LCM, "CreativeML OpenRAIL-M + OpenRAIL++ (LCM-LoRA)",
+    "huggingface.co/latent-consistency/lcm-lora-sdv1-5", "https://huggingface.co/latent-consistency/lcm-lora-sdv1-5", "sd-v1"
+)
+val ALL_OPTIONS = listOf(OPT_LAMA, OPT_MIGAN, OPT_SD, OPT_SDLCM, OPT_MOBILESAM, OPT_SAM2)
+private val ALL = ALL_OPTIONS.flatMap { it.files }.distinct()
 
 /**
  * Scarica, conserva e aggiorna nella memoria interna i modelli IA:
@@ -113,6 +139,10 @@ object ModelManager {
 
     fun file(ctx: Context, f: ModelFile) = fileOf(ctx, f)
     fun installed(ctx: Context, o: ModelOption) = o.files.all { has(ctx, it) }
+    /** Spazio totale occupato (i file condivisi tra modelli contano una volta sola). */
+    fun totalInstalledSize(ctx: Context) = ALL.sumOf { fileOf(ctx, it).let { f -> if (f.exists()) f.length() else 0L } }
+    fun npuEnabled(ctx: Context) = prefs(ctx).getBoolean("use_npu", false)
+    fun setNpu(ctx: Context, on: Boolean) { prefs(ctx).edit().putBoolean("use_npu", on).apply(); Inpainter.release() }
     fun installedSize(ctx: Context, o: ModelOption) = o.files.sumOf { fileOf(ctx, it).let { f -> if (f.exists()) f.length() else 0L } }
     fun options(kind: Kind) = ALL_OPTIONS.filter { it.kind == kind }
 
@@ -166,7 +196,8 @@ object ModelManager {
     fun delete(ctx: Context, o: ModelOption): Boolean {
         if (_state.value is ModelState.Downloading) return false
         Inpainter.release(); Segmenter.release()
-        o.files.forEach { deleteFile(ctx, it) }
+        val keep = ALL_OPTIONS.filter { it !== o && installed(ctx, it) }.flatMap { it.files }.toSet()
+        o.files.filter { it !in keep }.forEach { deleteFile(ctx, it) }
         _state.value = if (anyReady(ctx)) ModelState.Ready else ModelState.Missing
         bump()
         return true
@@ -246,6 +277,14 @@ object ModelManager {
     private fun run(app: Context, targets: List<ModelFile>, replacing: Boolean) {
         val total = targets.sumOf { m -> usableRemote(app, m)?.size?.takeIf { it > 0 } ?: m.expected }
         _updateError.value = null
+        val need = targets.sumOf { it.expected }
+        val free = runCatching { android.os.StatFs(app.filesDir.path).availableBytes }.getOrDefault(Long.MAX_VALUE)
+        if (free < need + 300_000_000L) {
+            val msg = "spazio insufficiente: servono circa ${need / 1_000_000 + 300} MB liberi"
+            _updateError.value = msg
+            _state.value = if (anyReady(app)) ModelState.Ready else ModelState.Error(msg)
+            return
+        }
         _state.value = ModelState.Downloading(0f)
         scope.launch {
             if (replacing) { Inpainter.release(); Segmenter.release() }
