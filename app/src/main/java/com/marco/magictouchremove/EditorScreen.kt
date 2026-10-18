@@ -260,7 +260,9 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
                         val onLeft = !(cur.x < box + m * 2 && cur.y < box + m * 2)
                         val left = if (onLeft) m else size.width - box - m
                         val top = m
-                        val ls = scale * 2.2f
+                        // l'ingrandimento si riduce quando il pennello è grande, così il cerchio entra sempre nella lente
+                        val z = (box * 0.42f / (brushPx / 2f)).coerceIn(0.5f, 2.2f)
+                        val ls = scale * z
                         val ix = (cur.x - offset.x) / scale
                         val iy = (cur.y - offset.y) / scale
                         nc.save()
@@ -271,9 +273,13 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
                         nc.translate(-ix, -iy)
                         nc.drawBitmap(im, 0f, 0f, bmpPaint)
                         if (mk != null) nc.drawBitmap(mk, 0f, 0f, maskPaint)
+                        // mirino al centro della lente, con la stessa grandezza del tratto (dentro la lente)
+                        nc.translate(ix, iy)
+                        nc.scale(1f / ls, 1f / ls)
+                        if (vm.tool != Tool.LASSO) nc.drawCircle(0f, 0f, brushPx / 2f * z, ringPaint)
+                        else nc.drawCircle(0f, 0f, 4f * density, ringPaint)
+                        nc.drawCircle(0f, 0f, 2.5f * density, ringPaint)
                         nc.restore()
-                        if (vm.tool != Tool.LASSO) nc.drawCircle(left + box / 2f, top + box / 2f, brushPx / 2f * 2.2f, ringPaint)
-                        else nc.drawCircle(left + box / 2f, top + box / 2f, 4f * density, ringPaint)
                         nc.drawRect(left, top, left + box, top + box, boxPaint)
                     }
                 }
