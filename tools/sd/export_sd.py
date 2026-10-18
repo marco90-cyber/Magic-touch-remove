@@ -45,33 +45,65 @@ def export(mod, args, name, inn, outn, dyn=None):
     return p
 
 import onnxruntime as ort_check
+from onnxruntime.transformers import float16 as ortf16
+
+def _blk(mod, extra):
+    return list(getattr(mod, "DEFAULT_OP_BLOCK_LIST", [])) + extra
+
 STRATEGIES = [
-    ["Resize"],
-    ["Resize", "Constant"],
-    ["Resize", "Constant", "ConstantOfShape", "Range", "Shape", "Slice", "Gather", "Concat", "Unsqueeze", "Squeeze", "Cast", "Expand", "Reshape"],
+    ("ort", ["Resize"]),
+    ("ort", []),
+    ("onnxconverter", ["Resize", "Constant"]),
 ]
 
-def to_fp16(p32, final):
+def _convert(kind, extra, m):
+    if kind == "ort":
+        return ortf16.convert_float_to_float16(m, keep_io_types=True, disable_shape_infer=True, op_block_list=_blk(ortf16, extra))
+    return float16.convert_float_to_float16(m, keep_io_types=True, disable_shape_infer=True, op_block_list=_blk(float16, extra))
+
+def _loads(path, name):
+    try:
+        ort_check.InferenceSession(path, providers=["CPUExecutionProvider"]); log("carica OK", name); return True
+    except Exception as e:
+        log("carica ERRORE", name, str(e)[:400]); return False
+
+def to_fp16(p32, final, fallback=None):
     t0 = time.time()
-    m = onnx.load(p32)
     ok = False
-    for i, extra in enumerate(STRATEGIES):
-        m16 = float16.convert_float_to_float16(m, keep_io_types=True, disable_shape_infer=True,
-                                               op_block_list=list(float16.DEFAULT_OP_BLOCK_LIST) + extra)
-        onnx.save(m16, final)
-        del m16
+    for i, (kind, extra) in enumerate(STRATEGIES):
         try:
-            ort_check.InferenceSession(final, providers=["CPUExecutionProvider"])
-            log("strategia", i, "carica OK per", os.path.basename(final)); ok = True; break
+            m = onnx.load(p32)
+            m16 = _convert(kind, extra, m)
+            onnx.save(m16, final)
+            del m, m16
+            log("strategia", i, kind, extra)
+            if _loads(final, os.path.basename(final)):
+                ok = True; break
         except Exception as e:
-            log("strategia", i, "ERRORE", os.path.basename(final), str(e)[:500])
-        m = onnx.load(p32)
+            log("strategia", i, "eccezione", str(e)[:300])
+    if not ok and fallback is not None:
+        log("provo l'esportazione diretta in fp16 con torch")
+        pf = fallback()
+        m = onnx.load(pf); onnx.save(m, final); del m
+        ok = _loads(final, os.path.basename(final))
     if not ok:
         raise RuntimeError("nessuna strategia fp16 valida per " + final)
-    del m
     for f in os.listdir(TMP):
         os.remove(os.path.join(TMP, f))
     log("fp16", os.path.basename(final), os.path.getsize(final) // 1_000_000, "MB", round(time.time() - t0), "s")
+
+class UNH(torch.nn.Module):
+    """UNet con pesi fp16 ma ingressi/uscite fp32 (stesso contratto dell'altra versione)."""
+    def __init__(s, u): super().__init__(); s.u = u
+    def forward(s, sample, timestep, encoder_hidden_states):
+        return s.u(sample.half(), timestep, encoder_hidden_states.half(), return_dict=False)[0].float()
+
+def half_export(unet, name):
+    def run():
+        import copy
+        u = copy.deepcopy(unet).half()
+        return export(UNH(u), args, name + "_half", ["sample", "timestep", "encoder_hidden_states"], ["noise"], dyn)
+    return run
 
 def keep_fp32(p32, final):
     shutil.move(p32, final)
@@ -86,12 +118,12 @@ keep_fp32(export(VD(pipe.vae), (torch.randn(1, 4, 64, 64),), "vd", ["latent"], [
 
 args = (torch.randn(2, 9, 64, 64), torch.tensor([500.0]), torch.randn(2, 77, 768))
 dyn = {"sample": {0: "b"}, "encoder_hidden_states": {0: "b"}, "noise": {0: "b"}}
-to_fp16(export(UN(pipe.unet), args, "unet", ["sample", "timestep", "encoder_hidden_states"], ["noise"], dyn), f"{OUT}/sd15_inpaint_unet_fp16.onnx")
+to_fp16(export(UN(pipe.unet), args, "unet", ["sample", "timestep", "encoder_hidden_states"], ["noise"], dyn), f"{OUT}/sd15_inpaint_unet_fp16.onnx", half_export(pipe.unet, "unet"))
 
 # versione LCM: LoRA fusa nel modello
 pipe.load_lora_weights("latent-consistency/lcm-lora-sdv1-5")
 pipe.fuse_lora()
-to_fp16(export(UN(pipe.unet), args, "unet_lcm", ["sample", "timestep", "encoder_hidden_states"], ["noise"], dyn), f"{OUT}/sd15_inpaint_lcm_unet_fp16.onnx")
+to_fp16(export(UN(pipe.unet), args, "unet_lcm", ["sample", "timestep", "encoder_hidden_states"], ["noise"], dyn), f"{OUT}/sd15_inpaint_lcm_unet_fp16.onnx", half_export(pipe.unet, "unet_lcm"))
 
 from huggingface_hub import hf_hub_download
 for f in ("vocab.json", "merges.txt"):
