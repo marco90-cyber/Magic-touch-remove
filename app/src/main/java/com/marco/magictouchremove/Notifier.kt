@@ -87,11 +87,18 @@ object WorkKeeper {
         }
     }
     fun stop(ctx: Context) {
-        if (n.decrementAndGet() <= 0) { n.set(0); runCatching { ctx.stopService(Intent(ctx, WorkService::class.java)) } }
+        if (n.decrementAndGet() <= 0) { n.set(0); stopWhenUp(ctx.applicationContext, 0) }
+    }
+    /** Fermare il servizio prima che abbia chiamato startForeground() manda in crash l'app: si aspetta che sia partito. */
+    private fun stopWhenUp(ctx: Context, tries: Int) {
+        if (n.get() > 0) return
+        if (WorkService.up || tries >= 40) { runCatching { ctx.stopService(Intent(ctx, WorkService::class.java)) }; return }
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ stopWhenUp(ctx, tries + 1) }, 250)
     }
 }
 
 class WorkService : Service() {
+    companion object { @Volatile var up = false }
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Notifier.init(this)
@@ -100,9 +107,11 @@ class WorkService : Service() {
             if (Build.VERSION.SDK_INT >= 29) startForeground(Notifier.ID_PROGRESS, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
             else startForeground(Notifier.ID_PROGRESS, n)
         }
+        up = true
         return START_NOT_STICKY
     }
     override fun onDestroy() {
+        up = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }

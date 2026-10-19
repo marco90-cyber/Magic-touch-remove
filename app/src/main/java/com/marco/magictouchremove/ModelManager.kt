@@ -347,7 +347,11 @@ object ModelManager {
                         continue
                     }
                     val m = ALL.firstOrNull { it.name.equals(clean, ignoreCase = true) }
-                    if (m == null) { bad += "$rawName: non è un modello dell'app"; continue }
+                    if (m == null) {
+                        bad += if (rawName.startsWith(".pending") || rawName.endsWith(".crdownload") || rawName.endsWith(".part") || rawName.endsWith(".tmp"))
+                            "$rawName: download non completato, riscaricalo" else "$rawName: ignorato (non serve all'app)"
+                        continue
+                    }
                     if (size in 1 until m.minSize) { bad += "${m.name}: file incompleto"; doneBefore += size; continue }
                     if (!enoughSpace(size)) { bad += "${m.name}: spazio insufficiente"; doneBefore += size; continue }
                     runCatching { app.contentResolver.openInputStream(u)!!.use { store(m, it, m.name) } }
@@ -358,8 +362,11 @@ object ModelManager {
                 autoActivate(app); bump()
                 WorkKeeper.stop(app)
             }
+            val missing = ALL_OPTIONS.filter { o -> !installed(app, o) && o.files.any { has(app, it) } }
+                .map { o -> o.title + " incompleto, mancano: " + o.files.filter { !has(app, it) }.joinToString(", ") { it.name } }
             val msg = buildString {
-                append(if (ok.isEmpty()) "Nessun modello importato." else "Importati ${ok.size} file.")
+                append(if (ok.isEmpty()) "Nessun modello importato." else "Importati ${ok.size} file: ${ok.joinToString(", ")}.")
+                missing.forEach { append("\n$it") }
                 if (bad.isNotEmpty()) append("\n" + bad.joinToString("\n"))
             }
             AppLog.log("IMPORT", msg.replace("\n", " | "))
