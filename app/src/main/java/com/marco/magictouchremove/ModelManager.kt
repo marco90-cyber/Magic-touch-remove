@@ -7,6 +7,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
@@ -273,6 +274,77 @@ object ModelManager {
         val app = ctx.applicationContext
         val targets = ALL.filter { needsUpdate(app, it) }
         if (targets.isNotEmpty()) run(app, targets, replacing = true)
+    }
+
+    /** Importa file di modello scaricati a mano (es. dalle Releases di GitHub). [onDone] riceve il riepilogo. */
+    fun importFiles(ctx: Context, uris: List<android.net.Uri>, onDone: (String) -> Unit) {
+        if (uris.isEmpty() || _state.value is ModelState.Downloading) return
+        val app = ctx.applicationContext
+        _state.value = ModelState.Downloading(0f)
+        WorkKeeper.start(app, "Importazione dei modelli IA")
+        scope.launch {
+            val ok = mutableListOf<String>(); val bad = mutableListOf<String>()
+            try {
+                Inpainter.release(); Segmenter.release()
+                var total = 0L
+                val items = uris.map { u ->
+                    val (name, size) = app.contentResolver.query(u, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME, android.provider.OpenableColumns.SIZE), null, null, null)
+                        ?.use { c -> if (c.moveToFirst()) (c.getString(0) ?: "") to c.getLong(1) else "" to 0L } ?: ("" to 0L)
+                    total += size.coerceAtLeast(0)
+                    Triple(u, name, size)
+                }
+                var doneBefore = 0L
+                for ((u, rawName, size) in items) {
+                    // i browser rinominano i duplicati ("file (1).onnx"): si toglie il suffisso
+                    val clean = rawName.replace(Regex("\\s*\\(\\d+\\)(?=\\.[^.]+$)"), "")
+                    val m = ALL.firstOrNull { it.name.equals(clean, ignoreCase = true) }
+                    if (m == null) { bad += "$rawName: non è un modello dell'app"; continue }
+                    if (size in 1 until m.minSize) { bad += "${m.name}: file incompleto"; continue }
+                    val free = runCatching { android.os.StatFs(app.filesDir.path).availableBytes }.getOrDefault(Long.MAX_VALUE)
+                    if (free < size + 100_000_000L) { bad += "${m.name}: spazio insufficiente"; continue }
+                    val target = fileOf(app, m)
+                    target.parentFile?.mkdirs()
+                    val part = File(target.path + ".part")
+                    try {
+                        var done = 0L; var lastPct = -1
+                        app.contentResolver.openInputStream(u)!!.use { inp ->
+                            java.io.FileOutputStream(part).use { out ->
+                                val buf = ByteArray(256 * 1024)
+                                while (true) {
+                                    val n = inp.read(buf); if (n < 0) break
+                                    out.write(buf, 0, n); done += n
+                                    val f = ((doneBefore + done).toFloat() / total.coerceAtLeast(1)).coerceIn(0f, 0.99f)
+                                    _state.value = ModelState.Downloading(f)
+                                    val pct = (f * 100).toInt()
+                                    if (pct != lastPct) { lastPct = pct; Notifier.progress(app, "Importazione dei modelli IA", "${m.name} · $pct%", pct) }
+                                }
+                            }
+                        }
+                        if (part.length() < m.minSize) { part.delete(); bad += "${m.name}: file incompleto"; continue }
+                        target.delete()
+                        File(target.path + ".part.url").delete()
+                        if (!part.renameTo(target)) { bad += "${m.name}: impossibile salvare"; continue }
+                        versionFile(app, m).writeText((usableRemote(app, m)?.version ?: 1).toString())
+                        ok += m.name
+                    } catch (e: Exception) {
+                        part.delete()
+                        bad += "${m.name}: ${e.message ?: e.javaClass.simpleName}"
+                    }
+                    doneBefore += size.coerceAtLeast(0)
+                }
+            } finally {
+                _state.value = if (anyReady(app)) ModelState.Ready else ModelState.Missing
+                autoActivate(app); bump()
+                WorkKeeper.stop(app)
+            }
+            val msg = buildString {
+                append(if (ok.isEmpty()) "Nessun modello importato." else "Importati ${ok.size} file.")
+                if (bad.isNotEmpty()) append("\n" + bad.joinToString("\n"))
+            }
+            AppLog.log("IMPORT", msg.replace("\n", " | "))
+            if (Notifier.downloadsOn(app) && !AppState.foreground) Notifier.done(app, "Importazione terminata", msg.lineSequence().first())
+            withContext(Dispatchers.Main) { onDone(msg) }
+        }
     }
 
     private fun run(app: Context, targets: List<ModelFile>, replacing: Boolean) {

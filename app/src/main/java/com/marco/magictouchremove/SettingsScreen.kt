@@ -267,6 +267,19 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
         Button(onClick = { showChooser = true }, enabled = model !is ModelState.Downloading, modifier = Modifier.fillMaxWidth()) {
             Text("Scarica altri modelli")
         }
+        val importPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments()
+        ) { uris ->
+            if (uris.isNotEmpty()) ModelManager.importFiles(ctx, uris) { Toast.makeText(ctx, it, Toast.LENGTH_LONG).show() }
+        }
+        OutlinedButton(
+            onClick = { importPicker.launch(arrayOf("*/*")) }, enabled = model !is ModelState.Downloading,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Importa da file…") }
+        Body(
+            "Hai già scaricato i file dei modelli (per esempio dalle Releases di GitHub)? Scegli uno o più file .onnx, .json o .txt: l'app riconosce " +
+                "dal nome quelli che le servono e li copia al suo interno. Per Stable Diffusion servono tutti i file della release sd-v1 più nsfw-v1."
+        )
         Body(
             "Origine dei download: i modelli vengono scaricati direttamente sul telefono. LaMa e MobileSAM da Hugging Face (repository dei " +
                 "rispettivi autori), MI-GAN e SAM 2 dalle Releases del repository GitHub del progetto; se la prima fonte non risponde l'app usa la copia " +
