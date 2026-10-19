@@ -102,6 +102,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 originalW = dims?.first ?: bmp.width
                 originalH = dims?.second ?: bmp.height
                 undo.clear(); redo.clear()
+                restored = false
                 source = bmp
                 sourceUri = uri
                 image = bmp
@@ -150,14 +151,57 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         return decoded.copy(Bitmap.Config.ARGB_8888, true)
     }
 
+    private var restored = false
+
+    /** Salva il lavoro in corso (chiamato quando l'app va in secondo piano). */
+    fun saveProject() {
+        val im = image ?: return
+        val src = source ?: return
+        if (blocked) return
+        val same = !hasChanges && im === src
+        val snapImg = im.copy(Bitmap.Config.ARGB_8888, false) ?: return
+        val snapSrc = if (same) snapImg else src
+        val w = originalW; val h = originalH; val u = sourceUri?.toString()
+        val ctx = getApplication<Application>()
+        Thread { runCatching { ProjectStore.save(ctx, snapImg, snapSrc, w, h, u) } }.start()
+    }
+
+    /** Riprende il lavoro salvato. */
+    fun resumeProject() {
+        viewModelScope.launch {
+            busy = true
+            try {
+                val sv = withContext(Dispatchers.IO) { ProjectStore.load(getApplication()) }
+                if (sv == null) { message = "Lavoro non più disponibile"; ProjectStore.clear(getApplication()); return@launch }
+                undo.clear(); redo.clear()
+                originalW = sv.w; originalH = sv.h
+                source = sv.source
+                sourceUri = sv.uri?.let { Uri.parse(it) }
+                image = sv.image
+                mask = Bitmap.createBitmap(sv.image.width, sv.image.height, Bitmap.Config.ALPHA_8)
+                hasMask = false
+                lasso.reset()
+                restored = true
+                loadId++
+                refreshHistoryFlags()
+                version++
+            } catch (e: Exception) {
+                AppLog.log("ERRORE", "ripresa lavoro: ${e.stackTraceToString()}")
+                message = "Impossibile riprendere il lavoro"
+            } finally { busy = false }
+        }
+    }
+
     fun close() {
+        restored = false
+        ProjectStore.clear(getApplication())
         image = null; mask = null; source = null; sourceUri = null
         undo.clear(); redo.clear()
         hasMask = false
         refreshHistoryFlags()
     }
 
-    val hasChanges: Boolean get() = undo.isNotEmpty()
+    val hasChanges: Boolean get() = undo.isNotEmpty() || restored
 
     // ---- undo / redo ----
     private fun current() = Snapshot(image!!, mask!!, hasMask)

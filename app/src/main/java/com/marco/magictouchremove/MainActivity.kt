@@ -55,7 +55,11 @@ import androidx.compose.foundation.layout.Row
 class MainActivity : ComponentActivity() {
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
     override fun onStart() { super.onStart(); AppState.started++ }
-    override fun onStop() { AppState.started = maxOf(0, AppState.started - 1); super.onStop() }
+    override fun onStop() {
+        AppState.started = maxOf(0, AppState.started - 1)
+        runCatching { androidx.lifecycle.ViewModelProvider(this)[EditorViewModel::class.java].saveProject() }
+        super.onStop()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -146,7 +150,8 @@ private fun App() {
                 model = model,
                 onDownload = { ModelManager.download(ctx, it) },
                 onUpdate = { ModelManager.update(ctx) },
-                onPick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+                onPick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                onResume = { vm.resumeProject() }
             )
         }
     }

@@ -17,6 +17,10 @@ import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -51,7 +55,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(model: ModelState, onDownload: (List<ModelOption>) -> Unit, onUpdate: () -> Unit, onPick: () -> Unit) {
+fun HomeScreen(model: ModelState, onDownload: (List<ModelOption>) -> Unit, onUpdate: () -> Unit, onPick: () -> Unit, onResume: () -> Unit = {}) {
     val ctx = LocalContext.current
     val remote by ModelManager.remote.collectAsStateWithLifecycle()
     val rev by ModelManager.rev.collectAsStateWithLifecycle()
@@ -73,6 +77,7 @@ fun HomeScreen(model: ModelState, onDownload: (List<ModelOption>) -> Unit, onUpd
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        floatingActionButton = { ResumeCard(onResume) },
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Magic Touch Remove", fontWeight = FontWeight.SemiBold) },
@@ -176,4 +181,47 @@ fun HomeScreen(model: ModelState, onDownload: (List<ModelOption>) -> Unit, onUpd
             dismissButton = { TextButton(onClick = { showNeedModels = false }) { Text("Chiudi") } }
         )
     }
+}
+
+@Composable
+private fun ResumeCard(onResume: () -> Unit) {
+    val ctx = LocalContext.current
+    val rev = ProjectStore.rev
+    val has = remember(rev) { ProjectStore.exists(ctx) }
+    if (!has) return
+    val thumb = remember(rev) { ProjectStore.thumb(ctx)?.asImageBitmap() }
+    var menu by remember { mutableStateOf(false) }
+    var confirm by remember { mutableStateOf(false) }
+    androidx.compose.material3.Surface(
+        onClick = onResume, shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+        color = androidx.compose.ui.graphics.Color(0xFF1C1C1E), shadowElevation = 8.dp
+    ) {
+        Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (thumb != null) androidx.compose.foundation.Image(
+                thumb, null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.size(48.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+            )
+            Spacer(Modifier.width(10.dp))
+            Text("Continua", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.SemiBold)
+            Box {
+                IconButton(onClick = { menu = true }) {
+                    Icon(Icons.Filled.MoreVert, "Altro", tint = androidx.compose.ui.graphics.Color.White)
+                }
+                androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("Annulla modifiche") },
+                        leadingIcon = { Icon(Icons.Filled.Delete, null) },
+                        onClick = { menu = false; confirm = true }
+                    )
+                }
+            }
+        }
+    }
+    if (confirm) AlertDialog(
+        onDismissRequest = { confirm = false },
+        title = { Text("Annullare le modifiche?") },
+        text = { Text("Il lavoro in sospeso verrà eliminato e non potrà essere ripreso.") },
+        confirmButton = { TextButton(onClick = { confirm = false; ProjectStore.clear(ctx) }) { Text("Elimina", color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = { confirm = false }) { Text("Indietro") } }
+    )
 }
