@@ -104,6 +104,11 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
     var showChooser by remember { mutableStateOf(false) }
     val appUpdate = appState is UpdateState.Available || appState is UpdateState.Ready
 
+    val sp = remember { ctx.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE) }
+    var logUnlocked by remember { mutableStateOf(sp.getBoolean("log_unlocked", false)) }
+    var taps by remember { mutableStateOf(0) }
+    var lastTap by remember { mutableStateOf(0L) }
+
     BackHandler { if (page == Page.MAIN) onClose() else page = Page.MAIN }
 
     Scaffold(
@@ -130,7 +135,7 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
                     MenuRow(Icons.Filled.Memory, "Modelli IA", "Scegli, scarica ed elimina i modelli", false) { page = Page.MODELS }
                     MenuRow(Icons.Filled.Palette, "Tema", when (ThemeSettings.mode) { 1 -> "Chiaro"; 2 -> "Scuro"; else -> "Come il sistema" }, false) { page = Page.THEME }
                     MenuRow(Icons.Filled.Notifications, "Notifiche", "Avanzamento dei download e fine delle modifiche", false) { page = Page.NOTIFY }
-                    MenuRow(Icons.Filled.Description, "Registro eventi", "Visualizza e salva il log per diagnosticare problemi", false) { page = Page.LOG }
+                    if (logUnlocked) MenuRow(Icons.Filled.Description, "Registro eventi", "Visualizza e salva il log per diagnosticare problemi", false) { page = Page.LOG }
                     MenuRow(Icons.Filled.Info, "Informazioni", "Sviluppatori, versione, privacy e crediti", false) { page = Page.INFO }
                 }
                 Page.UPDATES -> {
@@ -394,7 +399,18 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
         InfoRow("Richiede", "Android 10 o superiore")
 
 
-        Section("Privacy")
+        Section("Privacy", onClick = {
+            val now = System.currentTimeMillis()
+            taps = if (now - lastTap > 1500) 1 else taps + 1
+            lastTap = now
+            if (!logUnlocked) {
+                if (taps >= 7) {
+                    logUnlocked = true
+                    sp.edit().putBoolean("log_unlocked", true).apply()
+                    Toast.makeText(ctx, "Registro eventi sbloccato", Toast.LENGTH_SHORT).show()
+                } else if (taps >= 4) Toast.makeText(ctx, "Ancora ${7 - taps} tocchi…", Toast.LENGTH_SHORT).show()
+            }
+        })
         Body("Le foto vengono elaborate solo sul tuo telefono e non sono mai inviate a server. La connessione serve solo per scaricare i modelli.")
 
         Section("Crediti e licenze")
@@ -501,10 +517,13 @@ private fun ThemeOption(icon: ImageVector, title: String, subtitle: String, valu
 }
 
 @Composable
-private fun Section(title: String) {
+private fun Section(title: String, onClick: (() -> Unit)? = null) {
     Spacer(Modifier.size(6.dp))
     HorizontalDivider()
-    Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 6.dp))
+    Text(
+        title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 6.dp).let { if (onClick != null) it.clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { onClick() } else it }
+    )
 }
 
 @Composable
