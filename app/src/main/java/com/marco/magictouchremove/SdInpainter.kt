@@ -16,6 +16,9 @@ import kotlin.math.sqrt
  * Tokenizzatore CLIP (BPE), identico a quello di Stable Diffusion.
  * Verificato in CI contro il tokenizzatore originale (tools/sd/sdref.py).
  */
+/** Contenuto esplicito rilevato: il processo viene interrotto e l'app mostra la schermata di blocco. */
+class ExplicitContentException : RuntimeException("contenuto non consentito")
+
 class ClipTokenizer(vocabJson: String, mergesText: String) {
     private val enc = HashMap<String, Int>()
     private val ranks = HashMap<String, Int>()
@@ -125,6 +128,10 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
         val plane = n * n
         val lat = n / 8
         val lplane = lat * lat
+        // Controllo di sicurezza sulla foto di partenza: se sembra esplicita il processo si ferma subito.
+        checkCancel()
+        progress("IA generativa · controllo di sicurezza…")
+        if (safety(px, n, "foto") >= NSFW_LIMIT) throw ExplicitContentException()
         checkCancel()
         progress("IA generativa · preparazione del testo…")
         val tok = ClipTokenizer(File(path("clip_vocab.json")).readText(), File(path("clip_merges.txt")).readText())
@@ -156,12 +163,6 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
                 val l = LamaInpainter(lp)
                 try { l.fill(px, hole, n) } finally { l.shut() }
             }.onFailure { AppLog.log("IA", "base LaMa non riuscita: ${it.message}") }.getOrNull()
-        }
-        // Foto di partenza: se contiene già contenuti espliciti l'IA generativa non viene usata affatto.
-        progress("IA generativa · controllo di sicurezza…")
-        if (safety(px, n, "foto") >= NSFW_LIMIT) {
-            Inpainter.notice = "Foto non adatta all'IA generativa: usato il riempimento standard."
-            return base ?: throw IllegalStateException("Foto non adatta all'IA generativa")
         }
         fun encode(s: OrtSession, data: FloatArray): FloatArray =
             OnnxTensor.createTensor(env, FloatBuffer.wrap(data), longArrayOf(1, 3, n.toLong(), n.toLong())).use { t ->
@@ -285,13 +286,10 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
             }
         }
 
-        // Controllo di sicurezza sul risultato: se sembra inappropriato lo scarta (in caso di dubbio o errore scarta comunque).
+        // Controllo di sicurezza sul risultato: se sembra esplicito il processo si ferma e non si restituisce nulla.
         checkCancel()
         progress("IA generativa · controllo di sicurezza…")
-        if (safety(out, n, "risultato") >= NSFW_LIMIT) {
-            Inpainter.notice = "Risultato dell'IA generativa scartato dal controllo di sicurezza: usato il riempimento standard."
-            return base ?: throw IllegalStateException("Risultato scartato dal controllo di sicurezza")
-        }
+        if (safety(out, n, "risultato") >= NSFW_LIMIT) throw ExplicitContentException()
         return out
     }
 
@@ -335,11 +333,12 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
         }
     }
 
-    /** Punteggio di sicurezza; se il controllo non riesce vale 1 (blocca). */
+    /** Punteggio di sicurezza; se il controllo non riesce l'operazione fallisce (non si procede mai senza controllo). */
     private fun safety(px: IntArray, n: Int, what: String): Float {
-        val score = runCatching { nsfwMax(px, n) }
-            .onFailure { AppLog.log("IA", "controllo di sicurezza ($what) non riuscito: ${it.message}") }
-            .getOrDefault(1f)
+        val score = runCatching { nsfwMax(px, n) }.getOrElse {
+            AppLog.log("IA", "controllo di sicurezza ($what) non riuscito: ${it.message}")
+            throw IllegalStateException("controllo di sicurezza non riuscito: l'IA generativa non può essere usata")
+        }
         AppLog.log("IA", "controllo di sicurezza ($what): punteggio ${"%.3f".format(score)} (soglia ${"%.2f".format(NSFW_LIMIT)})")
         return score
     }

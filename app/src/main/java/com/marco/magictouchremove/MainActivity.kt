@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -47,6 +48,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.foundation.layout.Row
 
@@ -133,7 +135,8 @@ private fun App() {
         )
         onDispose {}
     }
-    BackHandler(enabled = inEditor) { if (vm.hasChanges) confirmExit = true else vm.close() }
+    BackHandler(enabled = vm.blocked) { vm.blocked = false }
+    BackHandler(enabled = inEditor && !vm.blocked) { if (vm.hasChanges) confirmExit = true else vm.close() }
 
     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(if (inEditor) Color.Black else MaterialTheme.colorScheme.background).systemBarsPadding()) {
         if (inEditor) {
@@ -145,6 +148,23 @@ private fun App() {
                 onUpdate = { ModelManager.update(ctx) },
                 onPick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
             )
+        }
+    }
+
+    if (vm.blocked) {
+        androidx.compose.foundation.layout.Box(
+            Modifier.fillMaxSize().background(Color.Black).systemBarsPadding().padding(32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                Icon(Icons.Filled.Block, null, tint = Color(0xFFFF5449), modifier = Modifier.size(72.dp))
+                Text("Contenuto non consentito", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    "L'IA generativa non può elaborare questa immagine perché sembra contenere contenuti espliciti. L'operazione è stata interrotta e la foto è stata chiusa.",
+                    color = Color(0xFFCCCCCC), style = MaterialTheme.typography.bodyLarge, textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Button(onClick = { vm.blocked = false }) { Text("Torna alla home") }
+            }
         }
     }
 

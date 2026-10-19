@@ -60,6 +60,8 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     var comparing by mutableStateOf(false)
     /** True mentre lavora l'IA generativa (lenta): mostra il tasto Annulla. */
     var busyCancelable by mutableStateOf(false); private set
+    /** True quando un controllo di sicurezza ha bloccato il processo: l'app mostra la schermata nera di blocco. */
+    var blocked by mutableStateOf(false)
     fun cancelBusy() { Inpainter.cancelRequested = true }
     /** Pixel in più rispetto al bordo della selezione automatica (0/5/10/15). */
     var selExtra by mutableIntStateOf(0); private set
@@ -316,6 +318,13 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                     Inpainter.notice?.let { message = it; Inpainter.notice = null }
                 }
             }.onFailure {
+                if (it is ExplicitContentException) {
+                    AppLog.log("BLOCCO", "contenuto esplicito: processo interrotto, immagine chiusa")
+                    Inpainter.notice = null
+                    close()          // la foto non resta aperta né modificabile
+                    blocked = true
+                    return@onFailure
+                }
                 AppLog.log("IA", "fine con errore: ${it.stackTraceToString()}")
                 message = if (it is java.util.concurrent.CancellationException) "Operazione annullata"
                 else "Errore IA: ${it.message ?: it.javaClass.simpleName}"
@@ -324,6 +333,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             if (generative) WorkKeeper.stop(ctx)
             if (Notifier.doneOn(ctx) && !AppState.foreground && res.exceptionOrNull() !is java.util.concurrent.CancellationException) {
                 if (res.isSuccess && res.getOrNull() != null) Notifier.done(ctx, "Modifica completata", "La foto è pronta: tocca per aprirla.")
+                else if (res.exceptionOrNull() is ExplicitContentException) Notifier.done(ctx, "Modifica bloccata", "Contenuto non consentito: tocca per aprire l'app.")
                 else if (res.isFailure) Notifier.done(ctx, "Modifica non riuscita", "Qualcosa è andato storto: tocca per vedere.")
             }
             busyCancelable = false
