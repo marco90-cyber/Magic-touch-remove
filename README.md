@@ -87,7 +87,7 @@ Funziona meglio su superfici semplici (asfalto, pavimento, muro, sabbia); su sfo
 1. In **Impostazioni › Modelli IA** scarica e scegli *Stable Diffusion 1.5* (o la versione *LCM*, più veloce).
 2. Seleziona l'oggetto e cancella come al solito: l'IA ricostruisce **solo lo sfondo**. Prima LaMa riempie il buco con uno sfondo coerente, poi Stable Diffusion lo rifinisce con texture e dettaglio, senza inventare oggetti nuovi.
 3. **Non è possibile scrivere un testo** per generare contenuti: è una scelta di sicurezza, per impedire che il modello produca immagini inappropriate (per esempio nudo) a partire dalle foto.
-4. Ogni risultato passa da un **controllo di sicurezza** sul telefono (un classificatore di immagini): se sembra inappropriato viene scartato e l'app usa il riempimento standard di LaMa. In caso di dubbio o errore scarta comunque.
+4. Due **controlli di sicurezza** sul telefono (un classificatore di immagini, su più zone della foto): se la foto di partenza o il risultato sembrano inappropriati, l'IA generativa non viene usata (o il risultato viene scartato) e l'app usa il riempimento standard di LaMa. In caso di dubbio o errore blocca comunque.
 5. Resta sempre la possibilità di usare LaMa o MI-GAN, che non generano contenuti nuovi.
 6. Un'elaborazione richiede da decine di secondi a qualche minuto; puoi **annullarla**.
 

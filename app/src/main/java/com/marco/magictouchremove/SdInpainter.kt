@@ -90,7 +90,7 @@ class ClipTokenizer(vocabJson: String, mergesText: String) {
  */
 class SdInpainter(private val paths: Map<String, String>, private val lcm: Boolean, private val npu: Boolean, private val lamaPath: String? = null) : Inpainter() {
 
-    private val NSFW_LIMIT = 0.30f
+    private val NSFW_LIMIT = 0.15f
     private fun path(name: String) = paths[name] ?: error("file mancante: $name")
     private val unetName = if (lcm) "sd15_inpaint_lcm_unet_fp16.onnx" else "sd15_inpaint_unet_fp16.onnx"
 
@@ -156,6 +156,12 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
                 val l = LamaInpainter(lp)
                 try { l.fill(px, hole, n) } finally { l.shut() }
             }.onFailure { AppLog.log("IA", "base LaMa non riuscita: ${it.message}") }.getOrNull()
+        }
+        // Foto di partenza: se contiene già contenuti espliciti l'IA generativa non viene usata affatto.
+        progress("IA generativa · controllo di sicurezza…")
+        if (safety(px, n, "foto") >= NSFW_LIMIT) {
+            Inpainter.notice = "Foto non adatta all'IA generativa: usato il riempimento standard."
+            return base ?: throw IllegalStateException("Foto non adatta all'IA generativa")
         }
         fun encode(s: OrtSession, data: FloatArray): FloatArray =
             OnnxTensor.createTensor(env, FloatBuffer.wrap(data), longArrayOf(1, 3, n.toLong(), n.toLong())).use { t ->
@@ -279,42 +285,63 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
             }
         }
 
-        // Controllo di sicurezza: se il risultato sembra inappropriato lo scarta (in caso di dubbio o errore scarta comunque).
+        // Controllo di sicurezza sul risultato: se sembra inappropriato lo scarta (in caso di dubbio o errore scarta comunque).
         checkCancel()
         progress("IA generativa · controllo di sicurezza…")
-        val score = runCatching { nsfwScore(out, n) }
-            .onFailure { AppLog.log("IA", "controllo di sicurezza non riuscito: ${it.message}") }
-            .getOrDefault(1f)
-        AppLog.log("IA", "controllo di sicurezza: punteggio ${"%.3f".format(score)}")
-        if (score >= NSFW_LIMIT) {
+        if (safety(out, n, "risultato") >= NSFW_LIMIT) {
             Inpainter.notice = "Risultato dell'IA generativa scartato dal controllo di sicurezza: usato il riempimento standard."
             return base ?: throw IllegalStateException("Risultato scartato dal controllo di sicurezza")
         }
         return out
     }
 
-    /** Probabilità (0..1) che l'immagine sia inappropriata: ViT Falconsai/nsfw_image_detection (Apache-2.0), classi {0: normal, 1: nsfw}. */
-    private fun nsfwScore(px: IntArray, n: Int): Float {
+    /**
+     * Probabilità massima (0..1) che l'immagine sia inappropriata, su più viste: intera, quattro quarti e centro
+     * (un nudo parziale in un angolo si perderebbe riducendo tutto l'insieme a 224 pixel).
+     * Classificatore ViT Falconsai/nsfw_image_detection (Apache-2.0), classi {0: normal, 1: nsfw}.
+     */
+    private fun nsfwMax(px: IntArray, n: Int): Float {
         val bmp = android.graphics.Bitmap.createBitmap(px, n, n, android.graphics.Bitmap.Config.ARGB_8888)
-        val small = android.graphics.Bitmap.createScaledBitmap(bmp, 224, 224, true)
-        val q = IntArray(224 * 224); small.getPixels(q, 0, 224, 0, 0, 224, 224)
-        val f = FloatArray(3 * 224 * 224)
-        for (i in q.indices) {
-            f[i] = (((q[i] shr 16) and 255) / 255f - 0.5f) / 0.5f
-            f[224 * 224 + i] = (((q[i] shr 8) and 255) / 255f - 0.5f) / 0.5f
-            f[2 * 224 * 224 + i] = ((q[i] and 255) / 255f - 0.5f) / 0.5f
-        }
+        val h = n / 2; val q = n / 4
+        val views = listOf(
+            intArrayOf(0, 0, n, n), intArrayOf(0, 0, h, h), intArrayOf(h, 0, n - h, h),
+            intArrayOf(0, h, h, n - h), intArrayOf(h, h, n - h, n - h), intArrayOf(q, q, n - 2 * q, n - 2 * q)
+        )
         return session("nsfw_vit_fp32.onnx").use { s ->
-            OnnxTensor.createTensor(env, FloatBuffer.wrap(f), longArrayOf(1, 3, 224, 224)).use { t ->
-                s.run(mapOf(s.inputNames.first() to t)).use { r ->
-                    val fb = (r[0] as OnnxTensor).floatBuffer
-                    val a = fb.get(0); val b = fb.get(1)
-                    val m = maxOf(a, b)
-                    val ea = kotlin.math.exp(a - m); val eb = kotlin.math.exp(b - m)
-                    eb / (ea + eb)
+            var best = 0f
+            for (v in views) {
+                val crop = android.graphics.Bitmap.createBitmap(bmp, v[0], v[1], v[2], v[3])
+                val small = android.graphics.Bitmap.createScaledBitmap(crop, 224, 224, true)
+                val qx = IntArray(224 * 224); small.getPixels(qx, 0, 224, 0, 0, 224, 224)
+                val f = FloatArray(3 * 224 * 224)
+                for (i in qx.indices) {
+                    f[i] = (((qx[i] shr 16) and 255) / 255f - 0.5f) / 0.5f
+                    f[224 * 224 + i] = (((qx[i] shr 8) and 255) / 255f - 0.5f) / 0.5f
+                    f[2 * 224 * 224 + i] = ((qx[i] and 255) / 255f - 0.5f) / 0.5f
                 }
+                val p = OnnxTensor.createTensor(env, FloatBuffer.wrap(f), longArrayOf(1, 3, 224, 224)).use { t ->
+                    s.run(mapOf(s.inputNames.first() to t)).use { r ->
+                        val fb = (r[0] as OnnxTensor).floatBuffer
+                        val a = fb.get(0); val b = fb.get(1)
+                        val m = maxOf(a, b)
+                        val ea = kotlin.math.exp(a - m); val eb = kotlin.math.exp(b - m)
+                        eb / (ea + eb)
+                    }
+                }
+                if (crop !== bmp) crop.recycle(); small.recycle()
+                if (p > best) best = p
             }
+            best
         }
+    }
+
+    /** Punteggio di sicurezza; se il controllo non riesce vale 1 (blocca). */
+    private fun safety(px: IntArray, n: Int, what: String): Float {
+        val score = runCatching { nsfwMax(px, n) }
+            .onFailure { AppLog.log("IA", "controllo di sicurezza ($what) non riuscito: ${it.message}") }
+            .getOrDefault(1f)
+        AppLog.log("IA", "controllo di sicurezza ($what): punteggio ${"%.3f".format(score)} (soglia ${"%.2f".format(NSFW_LIMIT)})")
+        return score
     }
 
     override fun close() {}
