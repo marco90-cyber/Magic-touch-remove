@@ -294,43 +294,64 @@ object ModelManager {
                     Triple(u, name, size)
                 }
                 var doneBefore = 0L
-                for ((u, rawName, size) in items) {
-                    // i browser rinominano i duplicati ("file (1).onnx"): si toglie il suffisso
-                    val clean = rawName.replace(Regex("\\s*\\(\\d+\\)(?=\\.[^.]+$)"), "")
-                    val m = ALL.firstOrNull { it.name.equals(clean, ignoreCase = true) }
-                    if (m == null) { bad += "$rawName: non è un modello dell'app"; continue }
-                    if (size in 1 until m.minSize) { bad += "${m.name}: file incompleto"; continue }
-                    val free = runCatching { android.os.StatFs(app.filesDir.path).availableBytes }.getOrDefault(Long.MAX_VALUE)
-                    if (free < size + 100_000_000L) { bad += "${m.name}: spazio insufficiente"; continue }
+                var lastPct = -1
+                // copia un modello da un flusso: ritorna true se salvato
+                fun store(m: ModelFile, inp: java.io.InputStream, label: String): Boolean {
                     val target = fileOf(app, m)
                     target.parentFile?.mkdirs()
                     val part = File(target.path + ".part")
                     try {
-                        var done = 0L; var lastPct = -1
-                        app.contentResolver.openInputStream(u)!!.use { inp ->
-                            java.io.FileOutputStream(part).use { out ->
-                                val buf = ByteArray(256 * 1024)
-                                while (true) {
-                                    val n = inp.read(buf); if (n < 0) break
-                                    out.write(buf, 0, n); done += n
-                                    val f = ((doneBefore + done).toFloat() / total.coerceAtLeast(1)).coerceIn(0f, 0.99f)
-                                    _state.value = ModelState.Downloading(f)
-                                    val pct = (f * 100).toInt()
-                                    if (pct != lastPct) { lastPct = pct; Notifier.progress(app, "Importazione dei modelli IA", "${m.name} · $pct%", pct) }
-                                }
+                        java.io.FileOutputStream(part).use { out ->
+                            val buf = ByteArray(256 * 1024)
+                            while (true) {
+                                val n = inp.read(buf); if (n < 0) break
+                                out.write(buf, 0, n); doneBefore += n
+                                val f = (doneBefore.toFloat() / total.coerceAtLeast(1)).coerceIn(0f, 0.99f)
+                                _state.value = ModelState.Downloading(f)
+                                val pct = (f * 100).toInt()
+                                if (pct != lastPct) { lastPct = pct; Notifier.progress(app, "Importazione dei modelli IA", "${m.name} · $pct%", pct) }
                             }
                         }
-                        if (part.length() < m.minSize) { part.delete(); bad += "${m.name}: file incompleto"; continue }
+                        if (part.length() < m.minSize) { part.delete(); bad += "${m.name}: file incompleto"; return false }
                         target.delete()
                         File(target.path + ".part.url").delete()
-                        if (!part.renameTo(target)) { bad += "${m.name}: impossibile salvare"; continue }
+                        if (!part.renameTo(target)) { bad += "${m.name}: impossibile salvare"; return false }
                         versionFile(app, m).writeText((usableRemote(app, m)?.version ?: 1).toString())
                         ok += m.name
+                        return true
                     } catch (e: Exception) {
                         part.delete()
-                        bad += "${m.name}: ${e.message ?: e.javaClass.simpleName}"
+                        bad += "$label: ${e.message ?: e.javaClass.simpleName}"
+                        return false
                     }
-                    doneBefore += size.coerceAtLeast(0)
+                }
+                fun cleanName(n: String) = n.substringAfterLast('/').replace(Regex("\\s*\\(\\d+\\)(?=\\.[^.]+$)"), "")
+                fun enoughSpace(size: Long) =
+                    runCatching { android.os.StatFs(app.filesDir.path).availableBytes }.getOrDefault(Long.MAX_VALUE) >= size + 100_000_000L
+                for ((u, rawName, size) in items) {
+                    val clean = cleanName(rawName)
+                    if (clean.endsWith(".zip", ignoreCase = true)) {
+                        // pacchetto unico: si estraggono i file riconosciuti
+                        try {
+                            java.util.zip.ZipInputStream(app.contentResolver.openInputStream(u)!!.buffered(1 shl 20)).use { zin ->
+                                while (true) {
+                                    val e = zin.nextEntry ?: break
+                                    if (e.isDirectory) continue
+                                    val m = ALL.firstOrNull { it.name.equals(cleanName(e.name), ignoreCase = true) }
+                                    if (m == null) { zin.closeEntry(); continue }
+                                    if (!enoughSpace(m.expected)) { bad += "${m.name}: spazio insufficiente"; doneBefore += m.expected; continue }
+                                    store(m, object : java.io.FilterInputStream(zin) { override fun close() {} }, m.name)
+                                }
+                            }
+                        } catch (e: Exception) { bad += "$rawName: ${e.message ?: e.javaClass.simpleName}" }
+                        continue
+                    }
+                    val m = ALL.firstOrNull { it.name.equals(clean, ignoreCase = true) }
+                    if (m == null) { bad += "$rawName: non è un modello dell'app"; continue }
+                    if (size in 1 until m.minSize) { bad += "${m.name}: file incompleto"; doneBefore += size; continue }
+                    if (!enoughSpace(size)) { bad += "${m.name}: spazio insufficiente"; doneBefore += size; continue }
+                    runCatching { app.contentResolver.openInputStream(u)!!.use { store(m, it, m.name) } }
+                        .onFailure { bad += "${m.name}: ${it.message ?: it.javaClass.simpleName}" }
                 }
             } finally {
                 _state.value = if (anyReady(app)) ModelState.Ready else ModelState.Missing

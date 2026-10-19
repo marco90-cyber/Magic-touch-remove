@@ -277,7 +277,7 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
             modifier = Modifier.fillMaxWidth()
         ) { Text("Importa da file…") }
         Body(
-            "Hai già scaricato i file dei modelli (per esempio dalle Releases di GitHub)? Scegli uno o più file .onnx, .json o .txt: l'app riconosce " +
+            "Hai già scaricato i file dei modelli (per esempio dalle Releases di GitHub)? Scegli uno o più file (.onnx, .json, .txt) oppure il pacchetto unico .zip: l'app riconosce " +
                 "dal nome quelli che le servono e li copia al suo interno. Per Stable Diffusion servono tutti i file della release sd-v1 più nsfw-v1."
         )
         Body(

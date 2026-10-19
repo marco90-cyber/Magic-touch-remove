@@ -1,0 +1,30 @@
+name: Pacchetto modelli
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scarica i modelli dalle release e crea un unico file
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir pack && cd pack
+          for t in model-v1 migan-v1 sam-v1 sam2-v1 nsfw-v1; do
+            gh release download "$t" -R "$GITHUB_REPOSITORY" --pattern '*.onnx'
+          done
+          zip -0 ../magic-touch-models-base.zip *.onnx
+          ls -la ..
+      - name: Pubblica
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete pack-v1 -R "$GITHUB_REPOSITORY" -y --cleanup-tag || true
+          gh release create pack-v1 magic-touch-models-base.zip -R "$GITHUB_REPOSITORY" \
+            -t "Pacchetto modelli (un solo file)" \
+            -n "magic-touch-models-base.zip: LaMa, MI-GAN, MobileSAM, SAM 2 e filtro di sicurezza in un solo file. Si importa da Impostazioni > Modelli IA > Importa da file."
