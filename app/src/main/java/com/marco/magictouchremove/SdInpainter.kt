@@ -92,7 +92,8 @@ class ClipTokenizer(vocabJson: String, mergesText: String) {
  */
 class SdInpainter(private val paths: Map<String, String>, private val lcm: Boolean, private val npu: Boolean, private val lamaPath: String? = null) : Inpainter() {
 
-    private val NSFW_LIMIT = 0.15f
+    /** Blocca se la foto intera supera la soglia, oppure se almeno DUE ritagli diversi la superano (un solo ritaglio isolato non basta: evita i falsi allarmi su legno, pelle simile, ecc.). */
+    private val NSFW_LIMIT = 0.5f
     private fun path(name: String) = paths[name] ?: error("file mancante: $name")
     private val unetName = if (lcm) "sd15_inpaint_lcm_unet_fp16.onnx" else "sd15_inpaint_unet_fp16.onnx"
 
@@ -292,7 +293,7 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
      * (un nudo parziale in un angolo si perderebbe riducendo tutto l'insieme a 224 pixel).
      * Classificatore ViT Falconsai/nsfw_image_detection (Apache-2.0), classi {0: normal, 1: nsfw}.
      */
-    private fun nsfwMax(px: IntArray, n: Int): Float {
+    private fun nsfwScores(px: IntArray, n: Int): FloatArray {
         val bmp = android.graphics.Bitmap.createBitmap(px, n, n, android.graphics.Bitmap.Config.ARGB_8888)
         val h = n / 2; val q = n / 4
         val views = listOf(
@@ -300,8 +301,8 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
             intArrayOf(0, h, h, n - h), intArrayOf(h, h, n - h, n - h), intArrayOf(q, q, n - 2 * q, n - 2 * q)
         )
         return session("nsfw_vit_fp32.onnx").use { s ->
-            var best = 0f
-            for (v in views) {
+            val scores = FloatArray(views.size)
+            for ((vi, v) in views.withIndex()) {
                 val crop = android.graphics.Bitmap.createBitmap(bmp, v[0], v[1], v[2], v[3])
                 val small = android.graphics.Bitmap.createScaledBitmap(crop, 224, 224, true)
                 val qx = IntArray(224 * 224); small.getPixels(qx, 0, 224, 0, 0, 224, 224)
@@ -321,19 +322,22 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
                     }
                 }
                 if (crop !== bmp) crop.recycle(); small.recycle()
-                if (p > best) best = p
+                scores[vi] = p
             }
-            best
+            scores
         }
     }
 
     /** Punteggio di sicurezza; se il controllo non riesce l'operazione fallisce (non si procede mai senza controllo). */
     private fun safety(px: IntArray, n: Int, what: String): Float {
-        val score = runCatching { nsfwMax(px, n) }.getOrElse {
+        val all = runCatching { nsfwScores(px, n) }.getOrElse {
             AppLog.log("IA", "controllo di sicurezza ($what) non riuscito: ${it.message}")
             throw IllegalStateException("controllo di sicurezza non riuscito: l'IA generativa non può essere usata")
         }
-        AppLog.log("IA", "controllo di sicurezza ($what): punteggio ${"%.3f".format(score)} (soglia ${"%.2f".format(NSFW_LIMIT)})")
+        // all[0] = foto intera; all[1..5] = ritagli. Punteggio effettivo = max(intera, secondo ritaglio più alto)
+        val crops = all.drop(1).sortedDescending()
+        val score = maxOf(all[0], crops.getOrElse(1) { 0f })
+        AppLog.log("IA", "controllo di sicurezza ($what): intera ${"%.3f".format(all[0])} · ritagli ${all.drop(1).joinToString(" ") { "%.2f".format(it) }} → ${"%.3f".format(score)} (soglia ${"%.2f".format(NSFW_LIMIT)})")
         return score
     }
 

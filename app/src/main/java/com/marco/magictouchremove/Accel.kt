@@ -4,6 +4,8 @@ import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.os.Build
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import java.io.File
 
 /**
@@ -12,12 +14,17 @@ import java.io.File
  */
 object Accel {
     private lateinit var app: Context
+    /** Tiene lo schermo acceso mentre l'IA lavora. */
+    var keepScreen by androidx.compose.runtime.mutableStateOf(true)
+        private set
+    fun setKeepScreen(on: Boolean) { keepScreen = on; prefs.edit().putBoolean("keep_screen", on).apply() }
     private val prefs get() = app.getSharedPreferences("accel", Context.MODE_PRIVATE)
     private val marker get() = File(app.filesDir, "npu_try")
 
     /** Chiamare all'avvio, prima di creare sessioni. */
     fun init(ctx: Context) {
         app = ctx.applicationContext
+        keepScreen = prefs.getBoolean("keep_screen", true)
         if (marker.exists()) {
             val what = runCatching { marker.readText() }.getOrDefault("?")
             marker.delete()

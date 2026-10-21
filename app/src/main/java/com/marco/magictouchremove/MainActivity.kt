@@ -139,6 +139,11 @@ private fun App() {
         )
         onDispose {}
     }
+    val working = vm.busy
+    androidx.compose.runtime.DisposableEffect(working, Accel.keepScreen) {
+        if (working && Accel.keepScreen) activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { activity.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
     BackHandler(enabled = vm.blocked) { vm.blocked = false }
     BackHandler(enabled = inEditor && !vm.blocked) { if (vm.hasChanges) confirmExit = true else vm.close() }
 

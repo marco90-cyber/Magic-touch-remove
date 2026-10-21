@@ -207,6 +207,9 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
                             }
                         }
                     }
+                    Section("Schermo")
+                    var keep by remember { mutableStateOf(Accel.keepScreen) }
+                    NotifyRow("Schermo sempre acceso durante l'elaborazione", "Evita che il telefono si spenga mentre l'IA lavora.", keep) { keep = it; Accel.setKeepScreen(it) }
                     Section("Accelerazione NPU")
                     var npu by remember { mutableStateOf(Accel.enabled()) }
                     if (Accel.supported()) {
