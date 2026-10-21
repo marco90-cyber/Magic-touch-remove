@@ -16,9 +16,10 @@ jobs:
           python-version: "3.11"
       - name: Converti
         run: |
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install timm onnx onnxruntime numpy huggingface_hub
-          python tools/nsfw/export_marqo.py out
+          pip install torch --index-url https://download.pytorch.org/whl/cpu > pip.txt 2>&1 || { echo "::error::$(tail -n 4 pip.txt | tr '\n' ' ')"; exit 1; }
+          pip install timm onnx onnxscript onnxruntime numpy huggingface_hub >> pip.txt 2>&1 || { echo "::error::$(tail -n 4 pip.txt | tr '\n' ' ')"; exit 1; }
+          python tools/nsfw/export_marqo.py out > log.txt 2>&1 || { echo "::error::$(tail -n 6 log.txt | tr '\n' ' ' | cut -c1-900)"; exit 1; }
+          tail -n 3 log.txt
       - name: Pubblica
         env:
           GH_TOKEN: ${{ github.token }}

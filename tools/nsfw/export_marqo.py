@@ -9,7 +9,7 @@ print("labels", model.pretrained_cfg.get("label_names"), "mean", cfg.get("mean")
 path = f"{out}/nsfw2_marqo_fp32.onnx"
 x = torch.zeros(1, 3, 384, 384)
 torch.onnx.export(model, (x,), path, input_names=["pixel_values"], output_names=["logits"],
-                  dynamic_axes={"pixel_values": {0: "b"}, "logits": {0: "b"}}, opset_version=17, do_constant_folding=True)
+                  dynamic_axes={"pixel_values": {0: "b"}, "logits": {0: "b"}}, opset_version=17, do_constant_folding=True, dynamo=False)
 sess = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
 rng = np.random.default_rng(1)
 worst = 0.0
