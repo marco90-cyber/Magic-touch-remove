@@ -1,0 +1,29 @@
+name: Filtro sicurezza 2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Converti
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install timm onnx onnxruntime numpy huggingface_hub
+          python tools/nsfw/export_marqo.py out
+      - name: Pubblica
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete nsfw2-v1 -y --cleanup-tag || true
+          gh release create nsfw2-v1 out/nsfw2_marqo_fp32.onnx \
+            -t "Filtro di sicurezza 2" \
+            -n "Marqo/nsfw-image-detection-384 (Apache-2.0) convertito in ONNX: secondo parere per il controllo dei contenuti espliciti."
