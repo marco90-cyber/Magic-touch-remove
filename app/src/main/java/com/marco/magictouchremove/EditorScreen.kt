@@ -53,6 +53,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -100,6 +101,7 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
     var cursor by remember { mutableStateOf<Offset?>(null) }
     var showSettings by remember { mutableStateOf(false) }
+    var showModelPicker by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var sizePreview by remember { mutableStateOf(false) }
     var showSelMenu by remember { mutableStateOf(false) }
@@ -142,12 +144,14 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
     val ringPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = android.graphics.Color.WHITE; strokeWidth = 3f } }
     val boxPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = android.graphics.Color.argb(255, 46, 230, 166); strokeWidth = 4f } }
 
+    if (showModelPicker) ModelPickerDialog(enabled = !vm.busy, onDismiss = { showModelPicker = false; if (vm.tool == Tool.SELECT) vm.prepareSegmenter() })
     Column(Modifier.fillMaxSize().background(Color.Black)) {
         // ---- barra in alto ----
         TopAppBar(
             title = {},
             navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Indietro") } },
             actions = {
+                IconButton(onClick = { showModelPicker = true }) { Icon(Icons.Filled.Memory, "Scegli il modello IA") }
                 IconButton(onClick = { vm.undo() }, enabled = vm.canUndo && !vm.busy) { Icon(Icons.AutoMirrored.Filled.Undo, "Annulla") }
                 IconButton(onClick = { vm.redo() }, enabled = vm.canRedo && !vm.busy) { Icon(Icons.AutoMirrored.Filled.Redo, "Ripeti") }
                 IconButton(onClick = onSave) { Icon(Icons.Filled.IosShare, "Salva / esporta") }

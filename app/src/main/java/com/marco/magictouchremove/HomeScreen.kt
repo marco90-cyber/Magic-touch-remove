@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.ui.draw.clip
@@ -64,6 +65,7 @@ fun HomeScreen(model: ModelState, onDownload: (List<ModelOption>) -> Unit, onUpd
     val hasUpdate = modelUpdate || appUpd is UpdateState.Available || appUpd is UpdateState.Ready
     LaunchedEffect(Unit) { AppUpdater.checkOnLaunch(ctx) }
     var showInfo by remember { mutableStateOf(false) }
+    var showPicker by remember { mutableStateOf(false) }
     var showNeedModels by remember { mutableStateOf(false) }
     var showChooser by remember { mutableStateOf(false) }
     val ready = rev >= 0 && ModelManager.isReady(ctx)
@@ -82,6 +84,7 @@ fun HomeScreen(model: ModelState, onDownload: (List<ModelOption>) -> Unit, onUpd
             CenterAlignedTopAppBar(
                 title = { Text("Magic Touch Remove", fontWeight = FontWeight.SemiBold) },
                 actions = {
+                    IconButton(onClick = { showPicker = true }) { Icon(Icons.Filled.Memory, "Scegli il modello IA") }
                     IconButton(onClick = { showInfo = true }) {
                         BadgedBox(badge = { if (hasUpdate) Badge() }) { Icon(Icons.Filled.Settings, "Impostazioni") }
                     }
@@ -160,6 +163,7 @@ fun HomeScreen(model: ModelState, onDownload: (List<ModelOption>) -> Unit, onUpd
         }
     }
 
+    if (showPicker) ModelPickerDialog(enabled = model !is ModelState.Downloading, onDismiss = { showPicker = false }, onMore = { showChooser = true })
     AppUpdateDialog()
     if (showChooser) ModelChooserDialog(onDismiss = { showChooser = false }, onConfirm = onDownload)
     if (showNeedModels) {
