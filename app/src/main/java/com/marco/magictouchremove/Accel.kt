@@ -17,7 +17,7 @@ object Accel {
     /** Tiene lo schermo acceso mentre l'IA lavora. */
     var keepScreen by androidx.compose.runtime.mutableStateOf(true)
         private set
-    fun setKeepScreen(on: Boolean) { keepScreen = on; prefs.edit().putBoolean("keep_screen", on).apply() }
+    fun updateKeepScreen(on: Boolean) { keepScreen = on; prefs.edit().putBoolean("keep_screen", on).apply() }
     private val prefs get() = app.getSharedPreferences("accel", Context.MODE_PRIVATE)
     private val marker get() = File(app.filesDir, "npu_try")
 
