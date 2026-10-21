@@ -82,9 +82,9 @@ class MainActivity : ComponentActivity() {
             (getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(mi)
             "RAM libera ${mi.availMem shr 20} MB su ${mi.totalMem shr 20} MB"
         }
+        Accel.init(applicationContext)
         val sdCrash = SdDiag.takeCrash()
         if (sdCrash != null) AppLog.log("IA", "chiusura anomala durante: ${sdCrash.replace("\n", " · ")}")
-        if (sdCrash != null && ModelManager.npuEnabled(applicationContext)) ModelManager.setNpu(applicationContext, false)
         ModelManager.checkUpdates(applicationContext)   // controlla se ci sono nuove versioni dei modelli
         setContent {
             MagicTheme(dark = ThemeSettings.isDark()) {
@@ -95,7 +95,7 @@ class MainActivity : ComponentActivity() {
                         onDismissRequest = { crash = null },
                         confirmButton = { TextButton(onClick = { crash = null }) { Text("OK") } },
                         title = { Text("L'IA generativa ha chiuso l'app") },
-                        text = { Text("Il sistema ha fermato l'app durante l'elaborazione, probabilmente per memoria insufficiente.\n\nUltimo punto raggiunto:\n$c\n\nL'accelerazione NPU è stata disattivata. Usa LaMa o MI-GAN se il problema continua.") }
+                        text = { Text("Il sistema ha fermato l'app durante l'elaborazione, probabilmente per memoria insufficiente.\n\nUltimo punto raggiunto:\n$c\n\nUsa LaMa o MI-GAN se il problema continua.") }
                     )
                 }
             }

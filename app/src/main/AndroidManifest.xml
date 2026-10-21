@@ -35,5 +35,6 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+        <uses-native-library android:name="libcdsprpc.so" android:required="false" />
     </application>
 </manifest>

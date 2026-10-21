@@ -183,7 +183,7 @@ abstract class Inpainter {
                     "migan" -> MiganInpainter(path)
                     "sd15", "sd15lcm" -> SdInpainter(
                         opt.files.associate { it.name to ModelManager.file(ctx, it).absolutePath },
-                        lcm = opt.id == "sd15lcm", npu = ModelManager.npuEnabled(ctx),
+                        lcm = opt.id == "sd15lcm", npu = Accel.enabled(),
                         lamaPath = if (ModelManager.installed(ctx, OPT_LAMA)) ModelManager.file(ctx, OPT_LAMA.files[0]).absolutePath else null
                     )
                     else -> LamaInpainter(path)
@@ -196,7 +196,7 @@ abstract class Inpainter {
 }
 
 private fun newSession(env: OrtEnvironment, path: String): OrtSession =
-    env.createSession(path, OrtSession.SessionOptions().apply { setIntraOpNumThreads(4) })
+    Accel.session(env, path)
 
 /** LaMa (big-lama): immagine float 0..1, maschera 1 = da ricostruire. */
 internal class LamaInpainter(path: String) : Inpainter() {

@@ -207,6 +207,18 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
                             }
                         }
                     }
+                    Section("Accelerazione NPU")
+                    var npu by remember { mutableStateOf(Accel.enabled()) }
+                    if (Accel.supported()) {
+                        NotifyRow(
+                            "Usa l'NPU del telefono",
+                            "Chip rilevato: ${Accel.soc()}. Se l'NPU non funziona con un modello, l'app usa la CPU da sola." +
+                                if (Accel.autoOff()) " Disattivata automaticamente dopo un errore." else "",
+                            npu
+                        ) { npu = it; Accel.setEnabled(it) }
+                    } else {
+                        Body("Questo telefono (${Accel.soc()}) non ha un'NPU supportata dall'app: i modelli girano sulla CPU.")
+                    }
                     Section("Modelli IA")
 
         Body("Scegli quale modello usare per ogni funzione. Quello selezionato è usato nell'editor.")

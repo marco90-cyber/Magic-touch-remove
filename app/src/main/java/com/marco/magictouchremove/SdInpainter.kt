@@ -2,7 +2,6 @@ package com.marco.magictouchremove
 
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtSession
-import ai.onnxruntime.providers.NNAPIFlags
 import java.io.File
 import java.nio.FloatBuffer
 import java.nio.IntBuffer
@@ -99,13 +98,8 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
 
     private fun session(name: String): OrtSession {
         SdDiag.mark("carico $name")
-        val o = OrtSession.SessionOptions()
-        o.setMemoryPatternOptimization(false)
-        o.setCPUArenaAllocator(false)
-        o.setIntraOpNumThreads(4)
-        o.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.BASIC_OPT)
-        if (npu) runCatching { o.addNnapi(EnumSet.of(NNAPIFlags.USE_FP16)) }
-        return env.createSession(path(name), o).also { SdDiag.mark("caricato $name") }
+        return (if (npu) Accel.session(env, path(name), sd = true) else env.createSession(path(name), Accel.cpuOptions(sd = true)))
+            .also { SdDiag.mark("caricato $name") }
     }
 
     private fun progress(s: String) { SdDiag.mark(s); Inpainter.onProgress?.invoke(s) }

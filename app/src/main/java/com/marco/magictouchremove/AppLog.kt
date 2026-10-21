@@ -28,7 +28,7 @@ object AppLog {
         val v = runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull()
         log("AVVIO", "app $v · ${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) · " +
             "SoC ${if (Build.VERSION.SDK_INT >= 31) Build.SOC_MODEL else "?"} · ABI ${Build.SUPPORTED_ABIS.firstOrNull()} · " +
-            "RAM ${mi.totalMem shr 20} MB (libera ${mi.availMem shr 20} MB) · limite heap ${am.memoryClass}/${am.largeMemoryClass} MB · NPU ${if (ModelManager.npuEnabled(ctx)) "sì" else "no"}")
+            "RAM ${mi.totalMem shr 20} MB (libera ${mi.availMem shr 20} MB) · limite heap ${am.memoryClass}/${am.largeMemoryClass} MB · NPU ${if (Accel.enabled()) "sì (${Accel.soc()})" else "no"}")
         if (Build.VERSION.SDK_INT >= 30) runCatching {
             am.getHistoricalProcessExitReasons(ctx.packageName, 0, 5).forEach { r ->
                 log("USCITA", "${fmt.format(Date(r.timestamp))} · ${reason(r.reason)} · ${r.description ?: ""} · RSS ${r.rss shr 10} MB · PSS ${r.pss shr 10} MB")

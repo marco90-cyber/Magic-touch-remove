@@ -53,10 +53,8 @@ class MobileSamSegmenter(encoderPath: String, decoderPath: String) : Segmenter()
     private var embedding: FloatArray? = null
 
     init {
-        val opts = OrtSession.SessionOptions()
-        opts.setIntraOpNumThreads(4)
-        encoder = env.createSession(encoderPath, opts)
-        decoder = env.createSession(decoderPath, OrtSession.SessionOptions().apply { setIntraOpNumThreads(4) })
+        encoder = Accel.session(env, encoderPath)
+        decoder = Accel.session(env, decoderPath)
         encoderInput = encoder.inputNames.first()
     }
 
@@ -158,8 +156,8 @@ class MobileSamSegmenter(encoderPath: String, decoderPath: String) : Segmenter()
 /** SAM 2 Tiny (Meta): foto 1024×1024 normalizzata; le maschere escono a 256×256 e vengono ingrandite in modo morbido. */
 class Sam2Segmenter(encoderPath: String, decoderPath: String) : Segmenter() {
     private val env = OrtEnvironment.getEnvironment()
-    private val encoder = env.createSession(encoderPath, OrtSession.SessionOptions().apply { setIntraOpNumThreads(4) })
-    private val decoder = env.createSession(decoderPath, OrtSession.SessionOptions().apply { setIntraOpNumThreads(4) })
+    private val encoder = Accel.session(env, encoderPath)
+    private val decoder = Accel.session(env, decoderPath)
     private var embeddedFor: Bitmap? = null
     private var embed: FloatArray? = null
     private var feat0: FloatArray? = null

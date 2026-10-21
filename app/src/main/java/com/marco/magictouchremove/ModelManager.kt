@@ -93,16 +93,16 @@ private val SD_SHARED = listOf(SD_TE, SD_VE, SD_VD, SD_VOCAB, SD_MERGES, SD_NSFW
 val OPT_SD = ModelOption(
     "sd15", Kind.INPAINT, "Stable Diffusion 1.5 · Generativo", "Il più creativo · sperimentale",
     "IA generativa a diffusione: ricostruisce lo sfondo con dettagli realistici in aree grandi o complesse (non si può scrivere un testo) e controlla che il risultato sia appropriato. " +
-        "Molto pesante (~2,4 GB) e lenta: serve un telefono con NPU e molta RAM (almeno 8 GB). Non è il modello predefinito.",
-    listOf("Generativo", "Sperimentale", "Richiede NPU", "Molto pesante"),
+        "Molto pesante (~2,4 GB) e lenta: serve un telefono potente con molta RAM (almeno 8 GB). Non è il modello predefinito.",
+    listOf("Generativo", "Sperimentale", "Molto pesante"),
     SD_SHARED + SD_UNET, "CreativeML OpenRAIL-M",
     "huggingface.co/stable-diffusion-v1-5/stable-diffusion-inpainting", "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-inpainting", "sd-v1"
 )
 val OPT_SDLCM = ModelOption(
     "sd15lcm", Kind.INPAINT, "Stable Diffusion 1.5 LCM · Generativo veloce", "Generativo più rapido · sperimentale",
     "Stessa IA generativa ma ottimizzata a 4 passaggi (LCM): molto più rapida di quella standard, con qualità leggermente inferiore. " +
-        "Pesante (~2,4 GB): serve un telefono con NPU e molta RAM (almeno 8 GB). Non è il modello predefinito.",
-    listOf("Generativo", "Sperimentale", "Richiede NPU", "Più veloce del generativo standard"),
+        "Pesante (~2,4 GB): serve un telefono potente con molta RAM (almeno 8 GB). Non è il modello predefinito.",
+    listOf("Generativo", "Sperimentale", "Più veloce del generativo standard"),
     SD_SHARED + SD_UNET_LCM, "CreativeML OpenRAIL-M + OpenRAIL++ (LCM-LoRA)",
     "huggingface.co/latent-consistency/lcm-lora-sdv1-5", "https://huggingface.co/latent-consistency/lcm-lora-sdv1-5", "sd-v1"
 )
@@ -143,8 +143,6 @@ object ModelManager {
     fun installed(ctx: Context, o: ModelOption) = o.files.all { has(ctx, it) }
     /** Spazio totale occupato (i file condivisi tra modelli contano una volta sola). */
     fun totalInstalledSize(ctx: Context) = ALL.sumOf { fileOf(ctx, it).let { f -> if (f.exists()) f.length() else 0L } }
-    fun npuEnabled(ctx: Context) = prefs(ctx).getBoolean("use_npu", false)
-    fun setNpu(ctx: Context, on: Boolean) { prefs(ctx).edit().putBoolean("use_npu", on).apply(); Inpainter.release() }
     fun installedSize(ctx: Context, o: ModelOption) = o.files.sumOf { fileOf(ctx, it).let { f -> if (f.exists()) f.length() else 0L } }
     fun options(kind: Kind) = ALL_OPTIONS.filter { it.kind == kind }
 
