@@ -32,8 +32,8 @@ object Accel {
     fun supported(): Boolean =
         Build.VERSION.SDK_INT >= 31 && Build.SOC_MANUFACTURER.equals("QTI", true) ||
             Build.HARDWARE.equals("qcom", true) || Build.BOARD.lowercase().let { it.startsWith("sm") || it.startsWith("sdm") }
-    fun enabled(): Boolean = supported() && prefs.getBoolean("use_npu", true) && !prefs.getBoolean("auto_off", false)
-    fun autoOff(): Boolean = prefs.getBoolean("auto_off", false)
+    fun enabled(): Boolean = ::app.isInitialized && supported() && prefs.getBoolean("use_npu", true) && !prefs.getBoolean("auto_off", false)
+    fun autoOff(): Boolean = ::app.isInitialized && prefs.getBoolean("auto_off", false)
     fun setEnabled(on: Boolean) {
         prefs.edit().putBoolean("use_npu", on).putBoolean("auto_off", false).apply()
         Inpainter.release(); Segmenter.release()
