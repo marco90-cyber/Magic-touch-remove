@@ -284,7 +284,7 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
         // Controllo di sicurezza sul risultato: se sembra esplicito il processo si ferma e non si restituisce nulla.
         checkCancel()
         progress("IA generativa · controllo di sicurezza…")
-        if (safety(out, n, "risultato") >= NSFW_LIMIT) throw ExplicitContentException()
+        if (safety(out, n, "risultato", 0.98f) >= 0.98f) throw ExplicitContentException()
         return out
     }
 
@@ -329,7 +329,7 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
     }
 
     /** Punteggio di sicurezza; se il controllo non riesce l'operazione fallisce (non si procede mai senza controllo). */
-    private fun safety(px: IntArray, n: Int, what: String): Float {
+    private fun safety(px: IntArray, n: Int, what: String, threshold: Float = NSFW_LIMIT): Float {
         val all = runCatching { nsfwScores(px, n) }.getOrElse {
             AppLog.log("IA", "controllo di sicurezza ($what) non riuscito: ${it.message}")
             throw IllegalStateException("controllo di sicurezza non riuscito: l'IA generativa non può essere usata")
@@ -337,7 +337,7 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
         // all[0] = foto intera; all[1..5] = ritagli. Punteggio effettivo = max(intera, secondo ritaglio più alto)
         val crops = all.drop(1).sortedDescending()
         val score = maxOf(all[0], crops.getOrElse(1) { 0f })
-        AppLog.log("IA", "controllo di sicurezza ($what): intera ${"%.3f".format(all[0])} · ritagli ${all.drop(1).joinToString(" ") { "%.2f".format(it) }} → ${"%.3f".format(score)} (soglia ${"%.2f".format(NSFW_LIMIT)})")
+        AppLog.log("IA", "controllo di sicurezza ($what): intera ${"%.3f".format(all[0])} · ritagli ${all.drop(1).joinToString(" ") { "%.2f".format(it) }} → ${"%.3f".format(score)} (soglia ${"%.2f".format(threshold)})")
         return score
     }
 
