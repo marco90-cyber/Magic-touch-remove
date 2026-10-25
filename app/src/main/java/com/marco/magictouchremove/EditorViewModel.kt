@@ -277,7 +277,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             Tool.LASSO -> {
                 lasso.reset(); lasso.moveTo(x, y); lassoPoints = 1
             }
-            Tool.SELECT -> {}
+            Tool.SELECT, Tool.BLUR -> {}
         }
         version++
     }
