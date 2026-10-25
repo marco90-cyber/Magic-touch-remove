@@ -40,7 +40,7 @@ Tutto gira **sul telefono**: le foto non vengono mai inviate a nessun server.
 - **Cancella** con il tasto dedicato, oppure modalità **AUTO** che parte appena alzi il dito.
 - Più modelli tra cui scegliere, dal più veloce al più creativo (vedi [i modelli](#i-modelli-di-intelligenza-artificiale)).
 - Per la massima precisione l'app ritaglia la zona attorno alla maschera, la ricostruisce a 512×512 e reincolla il risultato sulla foto sostituendo solo i pixel selezionati.
-- **IA generativa** (Stable Diffusion 1.5, sperimentale): ricostruisce solo lo sfondo con dettagli realistici. Non accetta testo libero, per sicurezza.
+- **Sfocatura sfondo** (come una fotocamera): mappa di profondità con IA, tocco per scegliere il soggetto a fuoco, apertura regolabile.
 
 **Comodità**
 - **Lente d'ingrandimento** adattiva mentre disegni; zoom e spostamento a due dita, mantenuti quando apri i pannelli.
@@ -56,7 +56,7 @@ Tutto gira **sul telefono**: le foto non vengono mai inviate a nessun server.
 2. Aprilo sul telefono e consenti l'installazione da questa fonte, se Android lo chiede.
 3. Al primo avvio l'app propone di scaricare un modello IA (serve la connessione; poi tutto funziona offline).
 
-**Requisiti**: Android 10 o superiore (API 29), processore a 64 bit (arm64). Per l'IA generativa servono inoltre almeno **8 GB di RAM**, circa 2,5 GB di spazio libero e un telefono potente (vedi sotto).
+**Requisiti**: Android 10 o superiore (API 29), processore a 64 bit (arm64).
 
 Gli aggiornamenti successivi si installano dall'app (Impostazioni › Aggiornamenti): modelli e impostazioni restano.
 
@@ -83,13 +83,11 @@ Tieni premuto sul tasto **Selezione** per aprire il pannello:
 Nel pannello di **Selezione** muovi il cursore **Includi ombra**: l'app aggiunge alla selezione le zone vicine all'oggetto che sono più scure ma dello stesso colore del terreno.
 Funziona meglio su superfici semplici (asfalto, pavimento, muro, sabbia); su sfondi molto colorati o scene molto scure regola il cursore o seleziona l'ombra con il Pennello.
 
-### Usare l'IA generativa
-1. In **Impostazioni › Modelli IA** scarica e scegli *Stable Diffusion 1.5* (o la versione *LCM*, più veloce).
-2. Seleziona l'oggetto e cancella come al solito: l'IA ricostruisce **solo lo sfondo**. Prima LaMa riempie il buco con uno sfondo coerente, poi Stable Diffusion lo rifinisce con texture e dettaglio, senza inventare oggetti nuovi.
-3. **Non è possibile scrivere un testo** per generare contenuti: è una scelta di sicurezza, per impedire che il modello produca immagini inappropriate (per esempio nudo) a partire dalle foto.
-4. Due **controlli di sicurezza** sul telefono (un classificatore di immagini, su più zone della foto): se la foto di partenza o il risultato sembrano inappropriati, il processo viene **interrotto**: l'app mostra una schermata nera «Contenuto non consentito» con un pulsante per tornare alla home e la foto viene chiusa. Se il controllo non riesce, l'IA generativa non parte.
-5. Resta sempre la possibilità di usare LaMa o MI-GAN, che non generano contenuti nuovi.
-6. Un'elaborazione richiede da decine di secondi a qualche minuto; puoi **annullarla**.
+### Sfocare lo sfondo
+1. Scarica il modello **Depth Anything V2 Small** da **Impostazioni › Modelli IA** (~99 MB).
+2. Apri la foto e tocca **Sfocatura** nella barra degli strumenti: l'app analizza la profondità.
+3. **Tocca il soggetto** da tenere a fuoco (con il modello di selezione scaricato il soggetto resta nitido anche sui bordi).
+4. Regola **Apertura** (da f/16 a f/1.4: più basso = sfondo più sfocato) e **Zona a fuoco**, poi tocca **Applica**. L'effetto si annulla con Annulla come ogni modifica.
 
 ### Salvare la foto
 Tocca l'icona di salvataggio in alto e scegli **cartella, formato, qualità e dimensione**. L'app salva alla risoluzione dell'originale lasciando intatti i pixel che non hai modificato.
@@ -97,7 +95,7 @@ Tocca l'icona di salvataggio in alto e scegli **cartella, formato, qualità e di
 ### Scegliere i modelli, il tema e gli aggiornamenti
 Dalla Home apri l'ingranaggio **Impostazioni**:
 - **Aggiornamenti**: nuove versioni dell'app e dei modelli.
-- **Modelli IA**: scegli, scarica o elimina i modelli; interruttore NPU per l'IA generativa.
+- **Modelli IA**: scegli, scarica o elimina i modelli; interruttore NPU (sperimentale, spento di default) e schermo sempre acceso durante l'elaborazione.
 - **Tema**: chiaro, scuro o come il sistema.
 - **Registro eventi** e **Informazioni**.
 
@@ -110,13 +108,8 @@ I modelli non sono nell'APK: si scaricano dall'app (con verifica SHA-256) e si p
 | **MI-GAN** | Rimozione oggetti | ~28 MB | Molto leggero e veloce. |
 | **MobileSAM** | Selezione automatica | ~45 MB | Veloce, ideale per iniziare. |
 | **SAM 2 Tiny** | Selezione automatica | ~155 MB | Più preciso sui bordi, più lento. |
-| **Stable Diffusion 1.5 Inpainting** | IA generativa | ~2,4 GB | Sperimentale. Richiede un telefono potente (≥ 8 GB di RAM). |
-| **Stable Diffusion 1.5 LCM** | IA generativa veloce | ~2,4 GB | Sperimentale. 4 passaggi invece di 20, qualità leggermente inferiore. |
+| **Depth Anything V2 Small** | Profondità (sfocatura sfondo) | ~99 MB | Apache-2.0. Serve alla funzione Sfocatura. |
 
-Note sull'IA generativa:
-- È **sperimentale**: non è il modello predefinito, e i tempi dipendono molto dal telefono.
-- Un'eventuale **NPU** può accelerarla (interruttore nelle impostazioni dei modelli), ma non tutti i telefoni la supportano bene.
-- I file in comune tra le due versioni (testo, codec dell'immagine) si scaricano una sola volta.
 
 ## Impostazioni
 - **Aggiornamenti**: controlla le nuove versioni dell'app (si installa sopra l'esistente) e dei modelli.
@@ -126,8 +119,6 @@ Note sull'IA generativa:
 - **Informazioni**: versione, sviluppatori, privacy e crediti.
 
 ## Risoluzione dei problemi e registro eventi
-- **L'app si chiude con l'IA generativa**: succede quando manca memoria (Android chiude l'app). Prova la versione LCM, chiudi le altre app oppure usa LaMa / MI-GAN.
-- **Il risultato inventa un oggetto**: usa un modello non generativo (LaMa o MI-GAN), oppure aumenta *Pixel in più* per coprire bordi e ombre.
 - **Restano ombre o contorni**: usa *Includi ombra* e *Pixel in più*.
 - **Segnalare un problema**: Impostazioni › **Registro eventi** › *Salva il registro in un file…*, poi allega il file a una [issue](https://github.com/marco90-cyber/Magic-touch-remove/issues). Il registro contiene modello del telefono, RAM, passaggi dell'IA ed errori: **nessuna foto**.
 
@@ -137,9 +128,8 @@ Ogni push su `main` compila l'APK con GitHub Actions (`.github/workflows/build.y
 L'app controlla all'avvio l'ultima Release e, se c'è una versione più nuova, mostra «Nuova versione disponibile». L'APK si scarica, poi Android chiede conferma e lo installa sopra quello esistente.
 Perché funzioni **tutte le build devono essere firmate con la stessa chiave**: la chiave sta nel segreto GitHub `KEYSTORE_BASE64` (Settings › Secrets and variables › Actions). Senza il segreto la build parte comunque ma non pubblica la Release. Chi copia il progetto (fork) usa la propria chiave e ottiene un'app separata.
 
-Le Release `model-v1`, `sam-v1`, `sam2-v1`, `migan-v1`, `sd-v1`, `nsfw-v1` contengono i modelli che l'app scarica: **non vanno cancellate**.
+Le Release `model-v1`, `sam-v1`, `sam2-v1`, `migan-v1`, `depth-v1` contengono i modelli che l'app scarica: **non vanno cancellate**.
 
-Gli script per riconvertire Stable Diffusion e il classificatore di sicurezza in ONNX sono in [`tools/sd`](tools/sd) e [`tools/nsfw`](tools/nsfw).
 
 ## Aggiornare i modelli
 L'app legge `models.json` (nella radice del repository) all'avvio e dalle impostazioni: se un modello ha una `version` più alta di quella installata propone «Aggiorna modelli» (verifica SHA-256, ignora aggiornamenti con `minApp` superiore alla versione dell'app).
@@ -156,12 +146,9 @@ I modelli e le librerie di terze parti hanno **licenze proprie**, che restano va
 | MI-GAN | MIT | [Picsart-AI-Research/MI-GAN](https://github.com/Picsart-AI-Research/MI-GAN), [andraniksargsyan/migan](https://huggingface.co/andraniksargsyan/migan) |
 | MobileSAM | Apache-2.0 | [ChaoningZhang/MobileSAM](https://github.com/ChaoningZhang/MobileSAM), [Acly/MobileSAM](https://huggingface.co/Acly/MobileSAM) |
 | SAM 2 (Hiera Tiny) | Apache-2.0 | [facebookresearch/sam2](https://github.com/facebookresearch/sam2), [vietanhdev/segment-anything-2-onnx-models](https://huggingface.co/vietanhdev/segment-anything-2-onnx-models) |
-| Stable Diffusion 1.5 Inpainting | CreativeML OpenRAIL-M | [stable-diffusion-v1-5/stable-diffusion-inpainting](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-inpainting) |
-| LCM-LoRA (versione veloce) | OpenRAIL++ | [latent-consistency/lcm-lora-sdv1-5](https://huggingface.co/latent-consistency/lcm-lora-sdv1-5) |
-| Falconsai/nsfw_image_detection (controllo di sicurezza) | Apache-2.0 | [Falconsai/nsfw_image_detection](https://huggingface.co/Falconsai/nsfw_image_detection) |
+| Depth Anything V2 Small | Apache-2.0 | [depth-anything/Depth-Anything-V2-Small](https://huggingface.co/depth-anything/Depth-Anything-V2-Small), [onnx-community/depth-anything-v2-small](https://huggingface.co/onnx-community/depth-anything-v2-small) |
 | ONNX Runtime | MIT | [microsoft/onnxruntime](https://github.com/microsoft/onnxruntime) |
 | Jetpack Compose / AndroidX | Apache-2.0 | [developer.android.com](https://developer.android.com/jetpack) |
 
-⚠️ **Stable Diffusion** (CreativeML OpenRAIL-M / OpenRAIL++) ha **restrizioni d'uso**: non è consentito usarlo per generare contenuti illeciti, dannosi, ingannevoli o lesivi di persone. Usando i modelli generativi accetti di rispettare quelle condizioni, che trovi nelle pagine linkate sopra.
 
 I modelli non sono inclusi in questo repository né nell'APK: sono scaricati dall'app dalle Release di questo progetto o dalle pagine originali.
