@@ -54,6 +54,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -169,9 +170,13 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
                         var multi = false
                         var drawing = false
                         var selecting = false
+                        var focusing = false
+                        var moved = 0f
                         val toImg = { p: Offset -> Offset((p.x - offset.x) / scale, (p.y - offset.y) / scale) }
                         if (!vm.busy && vm.image != null && vm.tool == Tool.SELECT) {
                             selecting = true; selStart = down.position; selEnd = down.position
+                        } else if (!vm.busy && vm.image != null && vm.tool == Tool.BLUR) {
+                            focusing = true
                         } else if (!vm.busy && vm.image != null) {
                             val radius = vm.brushDp * density / scale / 2f
                             val p = toImg(down.position)
@@ -196,6 +201,9 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
                                 offset = Offset(c.x + (offset.x - c.x) * f + pan.x, c.y + (offset.y - c.y) * f + pan.y)
                                 scale = ns
                                 event.changes.forEach { it.consume() }
+                            } else if (focusing && pressed == 1) {
+                                val ch = event.changes.first { it.pressed }
+                                moved = max(moved, (ch.position - down.position).getDistance())
                             } else if (selecting && pressed == 1) {
                                 val ch = event.changes.first { it.pressed }
                                 selEnd = ch.position
@@ -208,6 +216,10 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
                                 ch.consume()
                             }
                         } while (event.changes.any { it.pressed })
+                        if (focusing && !multi && moved < 14f * density) {
+                            val p = toImg(down.position)
+                            vm.setFocus(PointF(p.x, p.y))
+                        }
                         if (drawing) vm.endStroke()
                         if (selecting) {
                             val a = selStart
@@ -232,20 +244,30 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
                 val cur0 = vm.image ?: return@Canvas
                 val cmp = vm.comparing
                 val im = if (cmp) (vm.original ?: cur0) else cur0
-                val mk = if (cmp) null else vm.mask
+                val blurring = vm.tool == Tool.BLUR && !cmp
+                val prev = if (blurring && vm.blurPreviewFor === cur0) vm.blurPreview else null
+                val mk = if (cmp || blurring) null else vm.mask
                 maskPaint.color = android.graphics.Color.argb((vm.maskOpacity * 255).toInt(), 46, 230, 166)
                 drawIntoCanvas { c ->
                     val nc = c.nativeCanvas
                     nc.save()
                     nc.translate(offset.x, offset.y)
                     nc.scale(scale, scale)
-                    nc.drawBitmap(im, 0f, 0f, bmpPaint)
+                    if (prev != null) nc.drawBitmap(prev, null, android.graphics.RectF(0f, 0f, im.width.toFloat(), im.height.toFloat()), bmpPaint)
+                    else nc.drawBitmap(im, 0f, 0f, bmpPaint)
                     if (mk != null) nc.drawBitmap(mk, 0f, 0f, maskPaint)
                     if (vm.tool == Tool.LASSO) {
                         lassoPaint.strokeWidth = 2.5f * density / scale
                         nc.drawPath(vm.lasso, lassoPaint)
                     }
                     nc.restore()
+
+                    val fp = vm.focusPoint
+                    if (blurring && fp != null) {
+                        val sx = offset.x + fp.x * scale; val sy = offset.y + fp.y * scale
+                        nc.drawCircle(sx, sy, 22f * density, ringPaint)
+                        nc.drawCircle(sx, sy, 3f * density, ringPaint)
+                    }
 
                     val sa = selStart
                     val sb = selEnd
@@ -350,8 +372,23 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
                         Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator()
                             Text(vm.busyText, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
-                            if (vm.busyCancelable) androidx.compose.material3.TextButton(onClick = { vm.cancelBusy() }) { Text("Annulla") }
                         }
+                    }
+                }
+            }
+        }
+
+        // ---- pannello sfocatura sfondo ----
+        if (vm.tool == Tool.BLUR && vm.blurPreview != null) {
+            Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Sfocatura sfondo", style = MaterialTheme.typography.titleMedium)
+                    Text("Tocca il soggetto da tenere a fuoco", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    SettingSlider("Apertura f/${"%.1f".format(BlurEngine.fnum(vm.blurAmount))}", vm.blurAmount, 0f..1f) { vm.blurAmount = it; vm.updateBlurPreview() }
+                    SettingSlider("Zona a fuoco ${(vm.blurTol * 200).toInt()}%", vm.blurTol, 0f..0.5f) { vm.blurTol = it; vm.updateBlurPreview() }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                        androidx.compose.material3.OutlinedButton(onClick = { vm.leaveBlur() }, modifier = Modifier.weight(1f)) { Text("Annulla") }
+                        androidx.compose.material3.Button(onClick = { vm.applyBlur() }, enabled = !vm.busy, modifier = Modifier.weight(1f)) { Text("Applica") }
                     }
                 }
             }
@@ -443,6 +480,7 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
             ToolItem(Icons.Filled.Gesture, "Lasso", vm.tool == Tool.LASSO && !showSettings) { vm.tool = Tool.LASSO; showSettings = false; showSelMenu = false }
             ToolItem(Icons.Filled.Backspace, "Gomma", vm.tool == Tool.ERASER && !showSettings, sizeAdjust(Tool.ERASER), { vm.tool = Tool.ERASER; showSettings = false; showSelMenu = false })
             ToolItem(Icons.Filled.Restore, "Ripristina", vm.tool == Tool.RESTORE && !showSettings) { vm.tool = Tool.RESTORE; showSettings = false; showSelMenu = false }
+            ToolItem(Icons.Filled.BlurOn, "Sfocatura", vm.tool == Tool.BLUR) { showSettings = false; showSelMenu = false; vm.tool = Tool.BLUR; vm.enterBlur() }
             ToolItem(Icons.Filled.Tune, "Impostazioni", showSettings) { showSettings = !showSettings; showSelMenu = false }
         }
     }

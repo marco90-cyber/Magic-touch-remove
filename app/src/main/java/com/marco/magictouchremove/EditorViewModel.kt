@@ -32,7 +32,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-enum class Tool { SELECT, BRUSH, LASSO, ERASER, RESTORE }
+enum class Tool { SELECT, BRUSH, LASSO, ERASER, RESTORE, BLUR }
 
 /** Stato immutabile (copy-on-write) usato per undo/redo. */
 class Snapshot(val image: Bitmap, val mask: Bitmap, val hasMask: Boolean)
@@ -58,11 +58,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     var canRedo by mutableStateOf(false); private set
     var message by mutableStateOf<String?>(null)
     var comparing by mutableStateOf(false)
-    /** True mentre lavora l'IA generativa (lenta): mostra il tasto Annulla. */
-    var busyCancelable by mutableStateOf(false); private set
     /** True quando un controllo di sicurezza ha bloccato il processo: l'app mostra la schermata nera di blocco. */
-    var blocked by mutableStateOf(false)
-    fun cancelBusy() { Inpainter.cancelRequested = true }
     /** Pixel in più rispetto al bordo della selezione automatica (0/5/10/15). */
     var selExtra by mutableIntStateOf(0); private set
     /** Durezza della selezione: 1 = bordo netto; meno = il riempimento si fonde in modo graduale con la foto. */
@@ -102,6 +98,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 originalW = dims?.first ?: bmp.width
                 originalH = dims?.second ?: bmp.height
                 undo.clear(); redo.clear()
+                clearBlurCaches()
                 restored = false
                 source = bmp
                 sourceUri = uri
@@ -157,7 +154,6 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun saveProject() {
         val im = image ?: return
         val src = source ?: return
-        if (blocked) return
         val same = !hasChanges && im === src
         val snapImg = im.copy(Bitmap.Config.ARGB_8888, false) ?: return
         val snapSrc = if (same) snapImg else src
@@ -193,6 +189,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun close() {
+        clearBlurCaches()
         restored = false
         ProjectStore.clear(getApplication())
         image = null; mask = null; source = null; sourceUri = null
@@ -328,6 +325,174 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         if (auto && hasMask && (tool == Tool.BRUSH || tool == Tool.LASSO)) runInpaint()
     }
 
+
+    // ---- sfocatura dello sfondo ----
+    /** Intensità 0..1 (0 = f/16, 1 = f/1.4). */
+    var blurAmount by mutableFloatStateOf(0.6f)
+    /** Ampiezza della zona a fuoco attorno al soggetto (0..0.5). */
+    var blurTol by mutableFloatStateOf(0.12f)
+    var focusPoint by mutableStateOf<PointF?>(null); private set
+    var blurPreview by mutableStateOf<Bitmap?>(null); private set
+    var blurPreviewFor: Bitmap? = null; private set
+    private var depthMap: FloatArray? = null
+    private var depthFor: Bitmap? = null
+    private var subject: BooleanArray? = null
+    private var focusDepth = 0.5f
+    private var pvBase: IntArray? = null
+    private var pvDepth: FloatArray? = null
+    private var pvSubject: BooleanArray? = null
+    private var pvW = 0
+    private var pvH = 0
+    private var blurJob: kotlinx.coroutines.Job? = null
+
+    /** Entra nello strumento Sfocatura: analizza la profondità della foto (una volta sola per foto). */
+    fun enterBlur() {
+        val img = image ?: return
+        val ctx = getApplication<Application>()
+        if (ModelManager.active(ctx, Kind.DEPTH) == null) {
+            message = "Scarica prima il modello «Profondità» da Impostazioni › Modelli IA"
+            tool = Tool.BRUSH
+            return
+        }
+        if (depthFor === img && depthMap != null) { buildPreviewBase(img); updateBlurPreview(); return }
+        if (busy) return
+        busy = true
+        busyText = "Analisi della profondità…"
+        viewModelScope.launch {
+            val r = withContext(Dispatchers.Default) { runCatching { Depth.estimate(ctx, img) } }
+            busy = false
+            r.onSuccess { d ->
+                if (image !== img) return@onSuccess
+                depthMap = d; depthFor = img; subject = null
+                val c = PointF(img.width / 2f, img.height / 2f)
+                focusPoint = c
+                focusDepth = depthAround(d, img.width, img.height, c)
+                buildPreviewBase(img)
+                updateBlurPreview()
+            }.onFailure {
+                AppLog.log("ERRORE", "profondità: ${it.stackTraceToString()}")
+                message = "Errore analisi profondità: ${it.message ?: it.javaClass.simpleName}"
+                tool = Tool.BRUSH
+            }
+        }
+    }
+
+    private fun depthAround(d: FloatArray, w: Int, h: Int, p: PointF): Float {
+        val cx = p.x.toInt().coerceIn(0, w - 1); val cy = p.y.toInt().coerceIn(0, h - 1)
+        val r = max(2, min(w, h) / 60)
+        var sum = 0f; var n = 0
+        for (y in max(0, cy - r)..min(h - 1, cy + r)) for (x in max(0, cx - r)..min(w - 1, cx + r)) { sum += d[y * w + x]; n++ }
+        return if (n > 0) sum / n else 0.5f
+    }
+
+    private fun buildPreviewBase(img: Bitmap) {
+        val s = 640f / max(img.width, img.height)
+        val pw = (img.width * min(1f, s)).roundToInt().coerceAtLeast(1)
+        val ph = (img.height * min(1f, s)).roundToInt().coerceAtLeast(1)
+        val small = if (pw == img.width) img else Bitmap.createScaledBitmap(img, pw, ph, true)
+        val px = IntArray(pw * ph)
+        small.getPixels(px, 0, pw, 0, 0, pw, ph)
+        if (small !== img) small.recycle()
+        val d = depthMap ?: return
+        pvW = pw; pvH = ph; pvBase = px
+        pvDepth = FloatArray(pw * ph) { i -> d[(i / pw * img.height / ph) * img.width + (i % pw) * img.width / pw] }
+        resampleSubject(img)
+    }
+
+    private fun resampleSubject(img: Bitmap) {
+        val sj = subject
+        pvSubject = if (sj == null) null else BooleanArray(pvW * pvH) { i -> sj[(i / pvW * img.height / pvH) * img.width + (i % pvW) * img.width / pvW] }
+    }
+
+    /** Tocco sul soggetto da tenere a fuoco: usa la selezione automatica (se c'è) e la profondità di quel punto. */
+    fun setFocus(p: PointF) {
+        val img = image ?: return
+        val d = depthMap ?: return
+        if (busy || depthFor !== img || p.x < 0 || p.y < 0 || p.x >= img.width || p.y >= img.height) return
+        val ctx = getApplication<Application>()
+        focusPoint = p
+        busy = true
+        busyText = "Selezione del soggetto…"
+        viewModelScope.launch {
+            val sj = if (ModelManager.isSamReady(ctx))
+                withContext(Dispatchers.Default) { runCatching { Segmenter.get(ctx).select(img, p, null) }.getOrNull() } else null
+            busy = false
+            if (image !== img) return@launch
+            subject = sj
+            focusDepth = if (sj != null && sj.count { it } > 50) {
+                val vals = ArrayList<Float>()
+                for (i in sj.indices step 7) if (sj[i]) vals.add(d[i])
+                vals.sort(); vals[vals.size / 2]
+            } else depthAround(d, img.width, img.height, p)
+            resampleSubject(img)
+            updateBlurPreview()
+        }
+    }
+
+    fun updateBlurPreview() {
+        val base = pvBase ?: return
+        val dp = pvDepth ?: return
+        val img = image ?: return
+        val pw = pvW; val ph = pvH
+        val fd = focusDepth; val tol = blurTol; val fn = BlurEngine.fnum(blurAmount); val sj = pvSubject
+        blurJob?.cancel()
+        blurJob = viewModelScope.launch {
+            val out = withContext(Dispatchers.Default) { runCatching { BlurEngine.render(base, pw, ph, dp, fd, tol, sj, fn) }.getOrNull() } ?: return@launch
+            blurPreview = Bitmap.createBitmap(out, pw, ph, Bitmap.Config.ARGB_8888)
+            blurPreviewFor = img
+            version++
+        }
+    }
+
+    /** Applica la sfocatura alla foto a piena risoluzione di lavoro. */
+    fun applyBlur() {
+        val img = image ?: return
+        val d = depthMap ?: return
+        if (busy || depthFor !== img) return
+        busy = true
+        busyText = "Applico la sfocatura…"
+        val fd = focusDepth; val tol = blurTol; val fn = BlurEngine.fnum(blurAmount); val sj = subject
+        viewModelScope.launch {
+            val res = withContext(Dispatchers.Default) {
+                runCatching {
+                    val w = img.width; val h = img.height
+                    val px = IntArray(w * h)
+                    img.getPixels(px, 0, w, 0, 0, w, h)
+                    Bitmap.createBitmap(BlurEngine.render(px, w, h, d, fd, tol, sj, fn), w, h, Bitmap.Config.ARGB_8888)
+                }
+            }
+            busy = false
+            res.onSuccess { out ->
+                if (image === img) {
+                    pushUndo()
+                    image = out
+                    mask = Bitmap.createBitmap(out.width, out.height, Bitmap.Config.ALPHA_8)
+                    hasMask = false
+                    depthFor = out
+                    blurPreview = null; blurPreviewFor = null
+                    tool = Tool.BRUSH
+                    version++
+                    message = "Sfocatura applicata"
+                }
+            }.onFailure {
+                AppLog.log("ERRORE", "sfocatura: ${it.stackTraceToString()}")
+                message = if (it is OutOfMemoryError) "Memoria insufficiente: chiudi le altre app e riprova" else "Errore sfocatura: ${it.message ?: it.javaClass.simpleName}"
+            }
+        }
+    }
+
+    fun leaveBlur() {
+        blurJob?.cancel(); blurPreview = null; blurPreviewFor = null
+        if (tool == Tool.BLUR) tool = Tool.BRUSH
+        version++
+    }
+
+    private fun clearBlurCaches() {
+        blurJob?.cancel()
+        depthMap = null; depthFor = null; subject = null; pvBase = null; pvDepth = null; pvSubject = null
+        blurPreview = null; blurPreviewFor = null; focusPoint = null
+    }
+
     // ---- IA ----
     fun runInpaint() {
         val img = image ?: return
@@ -338,14 +503,8 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             message = "Scarica prima il modello IA dalla schermata iniziale"
             return
         }
-        val generative = ModelManager.active(ctx, Kind.INPAINT)?.id?.startsWith("sd") == true
         busy = true
-        busyCancelable = generative
-        busyText = if (generative) "IA generativa… può richiedere diversi minuti" else "Rimozione in corso…"
-        Inpainter.cancelRequested = false
-        Inpainter.notice = null
-        Inpainter.onProgress = if (generative) ({ s: String -> busyText = s; Notifier.progress(ctx, "IA generativa", s, -1) }) else null
-        if (generative) WorkKeeper.start(ctx, "IA generativa in corso…")
+        busyText = "Rimozione in corso…"
         viewModelScope.launch {
             val res = withContext(Dispatchers.Default) {
                 runCatching { Inpainter.get(ctx).inpaint(img, mk, expand.roundToInt(), ((1f - selSoft) * 10f).roundToInt()) }
@@ -359,28 +518,15 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                     mask = Bitmap.createBitmap(out.width, out.height, Bitmap.Config.ALPHA_8)
                     hasMask = false
                     version++
-                    Inpainter.notice?.let { message = it; Inpainter.notice = null }
                 }
             }.onFailure {
-                if (it is ExplicitContentException) {
-                    AppLog.log("BLOCCO", "contenuto esplicito: processo interrotto, immagine chiusa")
-                    Inpainter.notice = null
-                    close()          // la foto non resta aperta né modificabile
-                    blocked = true
-                    return@onFailure
-                }
                 AppLog.log("IA", "fine con errore: ${it.stackTraceToString()}")
-                message = if (it is java.util.concurrent.CancellationException) "Operazione annullata"
-                else "Errore IA: ${it.message ?: it.javaClass.simpleName}"
+                message = "Errore IA: ${it.message ?: it.javaClass.simpleName}"
             }
-            Inpainter.onProgress = null
-            if (generative) WorkKeeper.stop(ctx)
-            if (Notifier.doneOn(ctx) && !AppState.foreground && res.exceptionOrNull() !is java.util.concurrent.CancellationException) {
+            if (Notifier.doneOn(ctx) && !AppState.foreground) {
                 if (res.isSuccess && res.getOrNull() != null) Notifier.done(ctx, "Modifica completata", "La foto è pronta: tocca per aprirla.")
-                else if (res.exceptionOrNull() is ExplicitContentException) Notifier.done(ctx, "Modifica bloccata", "Contenuto non consentito: tocca per aprire l'app.")
                 else if (res.isFailure) Notifier.done(ctx, "Modifica non riuscita", "Qualcosa è andato storto: tocca per vedere.")
             }
-            busyCancelable = false
             busy = false
             if (tool == Tool.SELECT && image != null) prepareSegmenter(quiet = true)
         }

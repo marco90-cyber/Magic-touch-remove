@@ -42,7 +42,7 @@ fun ModelPickerDialog(enabled: Boolean = true, onDismiss: () -> Unit, onMore: ((
                 if (!enabled) Text("Attendi la fine dell'elaborazione per cambiare modello.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 for (kind in Kind.values()) {
                     Text(
-                        if (kind == Kind.INPAINT) "Rimozione oggetti" else "Selezione automatica",
+                        kind.label,
                         style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(top = 6.dp)
                     )

@@ -39,31 +39,26 @@ object Accel {
     fun supported(): Boolean =
         Build.VERSION.SDK_INT >= 31 && Build.SOC_MANUFACTURER.equals("QTI", true) ||
             Build.HARDWARE.equals("qcom", true) || Build.BOARD.lowercase().let { it.startsWith("sm") || it.startsWith("sdm") }
-    fun enabled(): Boolean = ::app.isInitialized && supported() && prefs.getBoolean("use_npu", true) && !prefs.getBoolean("auto_off", false)
+    fun enabled(): Boolean = ::app.isInitialized && supported() && prefs.getBoolean("use_npu", false) && !prefs.getBoolean("auto_off", false)
     fun autoOff(): Boolean = ::app.isInitialized && prefs.getBoolean("auto_off", false)
     fun setEnabled(on: Boolean) {
         prefs.edit().putBoolean("use_npu", on).putBoolean("auto_off", false).apply()
-        Inpainter.release(); Segmenter.release()
+        Inpainter.release(); Segmenter.release(); Depth.release()
     }
 
     /** Opzioni comuni per la CPU. */
-    fun cpuOptions(sd: Boolean = false): OrtSession.SessionOptions = OrtSession.SessionOptions().apply {
+    fun cpuOptions(): OrtSession.SessionOptions = OrtSession.SessionOptions().apply {
         setIntraOpNumThreads(Runtime.getRuntime().availableProcessors().coerceIn(2, 4))
-        if (sd) {
-            setMemoryPatternOptimization(false)
-            setCPUArenaAllocator(false)
-            setOptimizationLevel(OrtSession.SessionOptions.OptLevel.BASIC_OPT)
-        }
     }
 
     /** Crea una sessione: prima sull'NPU (se possibile), altrimenti sulla CPU. */
-    fun session(env: OrtEnvironment, path: String, sd: Boolean = false): OrtSession {
+    fun session(env: OrtEnvironment, path: String): OrtSession {
         val name = File(path).name
         if (enabled()) {
             val t0 = System.currentTimeMillis()
             try {
                 marker.writeText(name)
-                val o = cpuOptions(sd)
+                val o = cpuOptions()
                 o.addQnn(mapOf(
                     "backend_path" to "libQnnHtp.so",
                     "htp_performance_mode" to "burst",
@@ -78,6 +73,6 @@ object Accel {
                 AppLog.log("NPU", "$name: NPU non usata (${e.message?.lineSequence()?.firstOrNull() ?: e.javaClass.simpleName}), uso la CPU")
             }
         }
-        return env.createSession(path, cpuOptions(sd))
+        return env.createSession(path, cpuOptions())
     }
 }

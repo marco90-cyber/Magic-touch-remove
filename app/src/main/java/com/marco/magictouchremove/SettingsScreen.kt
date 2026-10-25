@@ -227,7 +227,7 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
         Body("Scegli quale modello usare per ogni funzione. Quello selezionato è usato nell'editor.")
         for (kind in Kind.values()) {
             Text(
-                if (kind == Kind.INPAINT) "Rimozione oggetti" else "Selezione automatica",
+                kind.label,
                 style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 4.dp)
             )
             val activeId = ModelManager.active(ctx, kind)?.id
@@ -298,7 +298,7 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
         ) { Text("Importa da file…") }
         Body(
             "Hai già scaricato i file dei modelli (per esempio dalle Releases di GitHub)? Scegli uno o più file (.onnx, .json, .txt) oppure il pacchetto unico .zip: l'app riconosce " +
-                "dal nome quelli che le servono e li copia al suo interno. Per Stable Diffusion servono tutti i file della release sd-v1 più nsfw-v1."
+                "dal nome quelli che le servono e li copia al suo interno."
         )
         Body(
             "Origine dei download: i modelli vengono scaricati direttamente sul telefono. LaMa e MobileSAM da Hugging Face (repository dei " +
@@ -366,7 +366,7 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
                             Toast.makeText(ctx, if (ok) "Registro salvato" else "Salvataggio non riuscito", Toast.LENGTH_SHORT).show()
                         }
                     }
-                    Body("Il registro raccoglie avvio, modelli, passaggi dell'IA generativa (con la RAM libera) ed errori, anche quando l'app viene chiusa dal sistema. Salvalo e mandamelo se qualcosa non funziona.")
+                    Body("Il registro raccoglie avvio, modelli, elaborazioni (con la RAM libera) ed errori, anche quando l'app viene chiusa dal sistema. Salvalo e mandamelo se qualcosa non funziona.")
                     Button(onClick = { saveLog.launch("magic-touch-remove-log.txt") }, modifier = Modifier.fillMaxWidth()) { Text("Salva il registro in un file…") }
                     OutlinedButton(onClick = { logText = AppLog.text() }, modifier = Modifier.fillMaxWidth()) { Text("Aggiorna") }
                     OutlinedButton(onClick = { AppLog.clear(); logText = "" }, modifier = Modifier.fillMaxWidth()) { Text("Cancella il registro") }

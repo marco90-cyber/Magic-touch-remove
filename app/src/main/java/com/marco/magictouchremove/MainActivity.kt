@@ -76,28 +76,11 @@ class MainActivity : ComponentActivity() {
         ThemeSettings.init(applicationContext)
         ModelManager.init(applicationContext)
         AppLog.init(applicationContext)
-        SdDiag.file = java.io.File(filesDir, "sd_progress.txt")
-        SdDiag.avail = {
-            val mi = android.app.ActivityManager.MemoryInfo()
-            (getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(mi)
-            "RAM libera ${mi.availMem shr 20} MB su ${mi.totalMem shr 20} MB"
-        }
         Accel.init(applicationContext)
-        val sdCrash = SdDiag.takeCrash()
-        if (sdCrash != null) AppLog.log("IA", "chiusura anomala durante: ${sdCrash.replace("\n", " · ")}")
         ModelManager.checkUpdates(applicationContext)   // controlla se ci sono nuove versioni dei modelli
         setContent {
             MagicTheme(dark = ThemeSettings.isDark()) {
-                var crash by remember { mutableStateOf(sdCrash) }
                 App()
-                crash?.let { c ->
-                    AlertDialog(
-                        onDismissRequest = { crash = null },
-                        confirmButton = { TextButton(onClick = { crash = null }) { Text("OK") } },
-                        title = { Text("L'IA generativa ha chiuso l'app") },
-                        text = { Text("Il sistema ha fermato l'app durante l'elaborazione, probabilmente per memoria insufficiente.\n\nUltimo punto raggiunto:\n$c\n\nUsa LaMa o MI-GAN se il problema continua.") }
-                    )
-                }
             }
         }
     }
@@ -144,8 +127,7 @@ private fun App() {
         if (working && Accel.keepScreen) activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose { activity.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
-    BackHandler(enabled = vm.blocked) { vm.blocked = false }
-    BackHandler(enabled = inEditor && !vm.blocked) { if (vm.hasChanges) confirmExit = true else vm.close() }
+    BackHandler(enabled = inEditor) { if (vm.hasChanges) confirmExit = true else vm.close() }
 
     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().background(if (inEditor) Color.Black else MaterialTheme.colorScheme.background).systemBarsPadding()) {
         if (inEditor) {
@@ -158,23 +140,6 @@ private fun App() {
                 onPick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                 onResume = { vm.resumeProject() }
             )
-        }
-    }
-
-    if (vm.blocked) {
-        androidx.compose.foundation.layout.Box(
-            Modifier.fillMaxSize().background(Color.Black).systemBarsPadding().padding(32.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                Icon(Icons.Filled.Block, null, tint = Color(0xFFFF5449), modifier = Modifier.size(72.dp))
-                Text("Contenuto non consentito", color = Color.White, style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    "L'IA generativa non può elaborare questa immagine perché sembra contenere contenuti espliciti. L'operazione è stata interrotta e la foto è stata chiusa.",
-                    color = Color(0xFFCCCCCC), style = MaterialTheme.typography.bodyLarge, textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-                Button(onClick = { vm.blocked = false }) { Text("Torna alla home") }
-            }
         }
     }
 

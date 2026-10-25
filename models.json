@@ -68,91 +68,14 @@
       ]
     },
     {
-      "file": "sd15_text_encoder_fp16.onnx",
+      "file": "depth_anything_v2_small.onnx",
       "version": 1,
       "minApp": 1,
-      "size": 246282313,
-      "sha256": "3c4c2ead821f3dd4722fb16c8acf17350ca9d7d0b4dabc114f40506c97754366",
+      "size": 99060839,
+      "sha256": "afb6a5c28f3b6bf1618c6e43f02073ef9dfdc70e937502d51603e57b0a1df10c",
       "notes": "",
       "urls": [
-        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/sd-v1/sd15_text_encoder_fp16.onnx"
-      ]
-    },
-    {
-      "file": "sd15_vae_encoder.onnx",
-      "version": 1,
-      "minApp": 1,
-      "size": 136773223,
-      "sha256": "b398442087d57081ffbf96b3ee489752e7b6c735f2b855826598af2ada9afa47",
-      "notes": "",
-      "urls": [
-        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/sd-v1/sd15_vae_encoder.onnx"
-      ]
-    },
-    {
-      "file": "sd15_vae_decoder.onnx",
-      "version": 1,
-      "minApp": 1,
-      "size": 265178078,
-      "sha256": "583fae7b516b46329dc8a77dd13dd723f2bd0841e0b030bf288f28f003697246",
-      "notes": "",
-      "urls": [
-        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/sd-v1/sd15_vae_decoder.onnx"
-      ]
-    },
-    {
-      "file": "clip_vocab.json",
-      "version": 1,
-      "minApp": 1,
-      "size": 1059962,
-      "sha256": "e089ad92ba36837a0d31433e555c8f45fe601ab5c221d4f607ded32d9f7a4349",
-      "notes": "",
-      "urls": [
-        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/sd-v1/clip_vocab.json"
-      ]
-    },
-    {
-      "file": "clip_merges.txt",
-      "version": 1,
-      "minApp": 1,
-      "size": 524619,
-      "sha256": "9fd691f7c8039210e0fced15865466c65820d09b63988b0174bfe25de299051a",
-      "notes": "",
-      "urls": [
-        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/sd-v1/clip_merges.txt"
-      ]
-    },
-    {
-      "file": "sd15_inpaint_unet_fp16.onnx",
-      "version": 1,
-      "minApp": 1,
-      "size": 1720761519,
-      "sha256": "289aacaa48e0b48b7a44e4f7832a136fb5713e06abb4a4bc5aaa89aebb06d95d",
-      "notes": "",
-      "urls": [
-        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/sd-v1/sd15_inpaint_unet_fp16.onnx"
-      ]
-    },
-    {
-      "file": "sd15_inpaint_lcm_unet_fp16.onnx",
-      "version": 1,
-      "minApp": 1,
-      "size": 1720783260,
-      "sha256": "852816c128eaf738b03af36f5b3b077e4d8733be66d2d206f648d8e668f18fae",
-      "notes": "",
-      "urls": [
-        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/sd-v1/sd15_inpaint_lcm_unet_fp16.onnx"
-      ]
-    },
-    {
-      "file": "nsfw_vit_fp32.onnx",
-      "version": 1,
-      "minApp": 1,
-      "size": 343463984,
-      "sha256": "65b6603fdccda3f736dccfc0a05f814e6b6da86eee30dc7cff2fc0fd0a0d3fc8",
-      "notes": "",
-      "urls": [
-        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/nsfw-v1/nsfw_vit_fp32.onnx"
+        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/depth-v1/depth_anything_v2_small.onnx"
       ]
     }
   ]

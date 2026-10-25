@@ -63,7 +63,7 @@ fun ModelChooserDialog(onDismiss: () -> Unit, onConfirm: (List<ModelOption>) -> 
                 )
                 for (kind in Kind.values()) {
                     Text(
-                        if (kind == Kind.INPAINT) "Rimozione oggetti" else "Selezione automatica",
+                        kind.label,
                         style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(top = 4.dp)
                     )
