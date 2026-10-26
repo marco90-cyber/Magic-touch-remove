@@ -1,0 +1,53 @@
+name: Modello SAM 2.1
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sam21:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Scarica e verifica SAM 2.1 Small
+        run: |
+          pip install huggingface_hub onnxruntime numpy > pip.txt 2>&1 || { echo "::error::$(tail -n 4 pip.txt | tr '\n' ' ')"; exit 1; }
+          cat > get.py <<'PY'
+          import glob, hashlib, os, shutil, zipfile, onnxruntime as ort
+          from huggingface_hub import hf_hub_download
+          z = hf_hub_download("vietanhdev/segment-anything-2.1-onnx-models", "sam2.1_hiera_small_20260221.zip")
+          os.makedirs("x", exist_ok=True); os.makedirs("out", exist_ok=True)
+          zipfile.ZipFile(z).extractall("x")
+          files = glob.glob("x/**/*.onnx", recursive=True)
+          print("files", files)
+          enc = [f for f in files if "enc" in os.path.basename(f).lower()][0]
+          dec = [f for f in files if "dec" in os.path.basename(f).lower()][0]
+          def sig(p):
+              s = ort.InferenceSession(p, providers=["CPUExecutionProvider"])
+              return ([(i.name, i.shape) for i in s.get_inputs()], [(o.name, o.shape) for o in s.get_outputs()])
+          se, sd = sig(enc), sig(dec)
+          print("ENC", se); print("DEC", sd)
+          need_e = {"image_embed", "high_res_feats_0", "high_res_feats_1"}
+          need_d = {"image_embed", "high_res_feats_0", "high_res_feats_1", "point_coords", "point_labels", "mask_input", "has_mask_input"}
+          assert need_e <= {o[0] for o in se[1]}, "encoder: uscite diverse"
+          assert need_d <= {i[0] for i in sd[0]}, "decoder: ingressi diversi"
+          shutil.copy(enc, "out/sam2.1_hiera_small.encoder.onnx"); shutil.copy(dec, "out/sam2.1_hiera_small.decoder.onnx")
+          for n in ("encoder", "decoder"):
+              p = f"out/sam2.1_hiera_small.{n}.onnx"
+              print(f"::notice title=SAM21 {n}::size={os.path.getsize(p)} sha={hashlib.sha256(open(p,'rb').read()).hexdigest()}")
+          print(f"::notice title=SAM21 sig::ENC={se} DEC={sd}")
+          PY
+          python get.py > log.txt 2>&1 || { echo "::error::$(tail -n 8 log.txt | tr '\n' ' ' | cut -c1-1500)"; exit 1; }
+          cat log.txt
+      - name: Pubblica
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete sam21-v1 -R "$GITHUB_REPOSITORY" -y --cleanup-tag || true
+          gh release create sam21-v1 out/sam2.1_hiera_small.encoder.onnx out/sam2.1_hiera_small.decoder.onnx -R "$GITHUB_REPOSITORY" \
+            -t "SAM 2.1 Small" \
+            -n "Segment Anything 2.1 Hiera Small (Apache-2.0), versione ONNX di vietanhdev: selezione automatica più precisa."
