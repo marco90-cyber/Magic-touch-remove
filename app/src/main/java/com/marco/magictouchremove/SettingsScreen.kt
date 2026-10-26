@@ -302,7 +302,7 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
         )
         Body(
             "Origine dei download: i modelli vengono scaricati direttamente sul telefono. LaMa e MobileSAM da Hugging Face (repository dei " +
-                "rispettivi autori), MI-GAN e SAM 2 dalle Releases del repository GitHub del progetto; se la prima fonte non risponde l'app usa la copia " +
+                "rispettivi autori), MI-GAN, SAM 2.1 e la profondità dalle Releases del repository GitHub del progetto; se la prima fonte non risponde l'app usa la copia " +
                 "identica nelle Releases. Nessun server intermedio e nessun dato personale inviato. I file stanno nella memoria interna dell'app."
         )
         InfoRow("Spazio occupato", fmtSize(total))
@@ -432,7 +432,8 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
         Body("LaMa – Resolution-robust Large Mask Inpainting (Apache-2.0)")
         Body("MI-GAN – Picsart AI Research (MIT)")
         Body("MobileSAM – Faster Segment Anything (MIT) · conversione ONNX di Acly")
-        Body("SAM 2 – Meta AI (Apache-2.0) · conversione ONNX di vietanhdev")
+        Body("SAM 2.1 – Meta AI (Apache-2.0) · conversione ONNX di vietanhdev")
+        Body("Depth Anything V2 – TikTok/HKU (Apache-2.0) · conversione ONNX di onnx-community")
         Body("ONNX Runtime – Microsoft (MIT)")
 
                 }

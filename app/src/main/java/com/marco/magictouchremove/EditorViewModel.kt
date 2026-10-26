@@ -594,7 +594,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ---- selezione automatica (MobileSAM / SAM 2) ----
+    // ---- selezione automatica (MobileSAM / SAM 2.1) ----
     /** Analizza in anticipo la foto corrente, così il tocco successivo è istantaneo. */
     fun prepareSegmenter(quiet: Boolean = false) {
         val img = image ?: return

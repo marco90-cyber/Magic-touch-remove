@@ -33,7 +33,7 @@ abstract class Segmenter {
                 instance?.close()
                 val e = ModelManager.file(ctx, opt.files[0]).absolutePath
                 val d = ModelManager.file(ctx, opt.files[1]).absolutePath
-                instance = if (opt.id == "sam2") Sam2Segmenter(e, d) else MobileSamSegmenter(e, d)
+                instance = if (opt.id.startsWith("sam2")) Sam2Segmenter(e, d) else MobileSamSegmenter(e, d)
                 instanceId = opt.id
             }
             instance!!
@@ -153,7 +153,7 @@ class MobileSamSegmenter(encoderPath: String, decoderPath: String) : Segmenter()
     }
 }
 
-/** SAM 2 Tiny (Meta): foto 1024×1024 normalizzata; le maschere escono a 256×256 e vengono ingrandite in modo morbido. */
+/** SAM 2.1 Small (Meta): foto 1024×1024 normalizzata; le maschere escono a 256×256 e vengono ingrandite in modo morbido. */
 class Sam2Segmenter(encoderPath: String, decoderPath: String) : Segmenter() {
     private val env = OrtEnvironment.getEnvironment()
     private val encoder = Accel.session(env, encoderPath)

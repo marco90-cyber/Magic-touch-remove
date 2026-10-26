@@ -46,28 +46,6 @@
       ]
     },
     {
-      "file": "sam2_hiera_tiny.encoder.onnx",
-      "version": 1,
-      "minApp": 1,
-      "size": 134261315,
-      "sha256": "4cc015ee18520e93f8c7ddfeaca7436039daaaaf19721b4b96a8810a805e82f7",
-      "notes": "",
-      "urls": [
-        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/sam2-v1/sam2_hiera_tiny.encoder.onnx"
-      ]
-    },
-    {
-      "file": "sam2_hiera_tiny.decoder.onnx",
-      "version": 1,
-      "minApp": 1,
-      "size": 20640886,
-      "sha256": "f5a4bd656c143899fb7f52d64ed81e6f6aeb37d477a0b6da50146ac7cf2187bf",
-      "notes": "",
-      "urls": [
-        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/sam2-v1/sam2_hiera_tiny.decoder.onnx"
-      ]
-    },
-    {
       "file": "depth_anything_v2_small.onnx",
       "version": 1,
       "minApp": 1,
@@ -76,6 +54,28 @@
       "notes": "",
       "urls": [
         "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/depth-v1/depth_anything_v2_small.onnx"
+      ]
+    },
+    {
+      "file": "sam2.1_hiera_small.encoder.onnx",
+      "version": 1,
+      "minApp": 1,
+      "size": 138018779,
+      "sha256": "275013f35a03fcf9d9f32f0490bfb7acd8b8fb86f145ba173123eb3886c8d4b2",
+      "notes": "",
+      "urls": [
+        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/sam21-v1/sam2.1_hiera_small.encoder.onnx"
+      ]
+    },
+    {
+      "file": "sam2.1_hiera_small.decoder.onnx",
+      "version": 1,
+      "minApp": 1,
+      "size": 16519569,
+      "sha256": "d158eb26a43d39eed23ef677d6826d17eb9eda951921f9a252fa5d36d871b57d",
+      "notes": "",
+      "urls": [
+        "https://github.com/marco90-cyber/Magic-touch-remove/releases/download/sam21-v1/sam2.1_hiera_small.decoder.onnx"
       ]
     }
   ]

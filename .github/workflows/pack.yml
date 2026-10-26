@@ -15,7 +15,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir pack && cd pack
-          for t in model-v1 migan-v1 sam-v1 sam2-v1 depth-v1; do
+          for t in model-v1 migan-v1 sam-v1 sam21-v1 depth-v1; do
             gh release download "$t" -R "$GITHUB_REPOSITORY" --pattern '*.onnx'
           done
           zip -0 ../magic-touch-models-base.zip *.onnx
@@ -27,4 +27,4 @@ jobs:
           gh release delete pack-v1 -R "$GITHUB_REPOSITORY" -y --cleanup-tag || true
           gh release create pack-v1 magic-touch-models-base.zip -R "$GITHUB_REPOSITORY" \
             -t "Pacchetto modelli (un solo file)" \
-            -n "magic-touch-models-base.zip: LaMa, MI-GAN, MobileSAM, SAM 2 e profondità in un solo file. Si importa da Impostazioni > Modelli IA > Importa da file."
+            -n "magic-touch-models-base.zip: LaMa, MI-GAN, MobileSAM, SAM 2.1 e profondità in un solo file. Si importa da Impostazioni > Modelli IA > Importa da file."

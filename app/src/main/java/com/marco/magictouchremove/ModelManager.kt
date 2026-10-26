@@ -76,14 +76,14 @@ val OPT_MOBILESAM = ModelOption(
     "MIT", "huggingface.co/Acly/MobileSAM", "https://huggingface.co/Acly/MobileSAM", "sam-v1"
 )
 val OPT_SAM2 = ModelOption(
-    "sam2", Kind.SELECT, "SAM 2 Tiny", "Il più preciso",
-    "Il Segment Anything 2 di Meta: bordi più netti e migliore con oggetti sottili o complessi. Più pesante e più lento nell'analisi della foto.",
+    "sam21", Kind.SELECT, "SAM 2.1 Small", "Il più preciso",
+    "Il Segment Anything 2.1 di Meta, versione Small: bordi più netti e risultati migliori con oggetti sottili, capelli o forme complesse. Più pesante di MobileSAM e un po' più lento nell'analisi della foto.",
     listOf("Più preciso", "Più pesante", "Più lento"),
     listOf(
-        ModelFile("sam2_hiera_tiny.encoder.onnx", 134_261_315L, 120_000_000L, listOf("$REPO/sam2-v1/sam2_hiera_tiny.encoder.onnx")),
-        ModelFile("sam2_hiera_tiny.decoder.onnx", 20_640_886L, 18_000_000L, listOf("$REPO/sam2-v1/sam2_hiera_tiny.decoder.onnx"))
+        ModelFile("sam2.1_hiera_small.encoder.onnx", 138_018_779L, 125_000_000L, listOf("$REPO/sam21-v1/sam2.1_hiera_small.encoder.onnx")),
+        ModelFile("sam2.1_hiera_small.decoder.onnx", 16_519_569L, 15_000_000L, listOf("$REPO/sam21-v1/sam2.1_hiera_small.decoder.onnx"))
     ),
-    "Apache-2.0", "huggingface.co/vietanhdev/segment-anything-2-onnx-models", "https://huggingface.co/vietanhdev/segment-anything-2-onnx-models", "sam2-v1"
+    "Apache-2.0", "huggingface.co/vietanhdev/segment-anything-2.1-onnx-models", "https://huggingface.co/vietanhdev/segment-anything-2.1-onnx-models", "sam21-v1"
 )
 val OPT_DEPTH = ModelOption(
     "depth", Kind.DEPTH, "Depth Anything V2 Small", "Mappa di profondità",
@@ -173,12 +173,12 @@ object ModelManager {
     fun latestVersionOf(ctx: Context, o: ModelOption) = o.files.maxOf { usableRemote(ctx, it)?.version ?: 0 }
     fun notesOf(ctx: Context, o: ModelOption) = o.files.firstNotNullOfOrNull { usableRemote(ctx, it)?.notes }
 
-    /** Rimuove i file della vecchia IA generativa (Stable Diffusion e filtro) rimasti sul telefono: occupano GB inutili. */
+    /** Rimuove i file di modelli non più usati (IA generativa, filtro, SAM 2 Tiny) rimasti sul telefono. */
     private fun purgeLegacy(ctx: Context) {
         runCatching {
             File(ctx.filesDir, "models").listFiles()?.forEach { f ->
                 val n = f.name
-                if (n.startsWith("sd15_") || n.startsWith("clip_") || n.startsWith("nsfw_")) { f.delete() }
+                if (n.startsWith("sd15_") || n.startsWith("clip_") || n.startsWith("nsfw_") || n.startsWith("sam2_hiera_tiny")) { f.delete() }
             }
             ctx.deleteFile("sd_progress.txt")
         }

@@ -27,7 +27,7 @@ Tutto gira **sul telefono**: le foto non vengono mai inviate a nessun server.
 ## Funzioni
 
 **Strumenti di selezione**
-- **Selezione automatica**: tocca un oggetto e l'IA ne trova il contorno (MobileSAM o SAM 2, a scelta). Disegna un riquadro per oggetti difficili.
+- **Selezione automatica**: tocca un oggetto e l'IA ne trova il contorno (MobileSAM o SAM 2.1, a scelta). Disegna un riquadro per oggetti difficili.
   - *Pixel in più* (0 / 5 / 10 / 15): allarga la selezione oltre il bordo, con anteprima in tempo reale.
   - *Includi ombra*: aggiunge alla selezione l'ombra dell'oggetto (vedi [la guida](#selezionare-anche-lombra)).
   - *Durezza*: bordo netto o sfumato, perché il riempimento si fonda con la foto.
@@ -107,7 +107,7 @@ I modelli non sono nell'APK: si scaricano dall'app (con verifica SHA-256) e si p
 | **LaMa** | Rimozione oggetti (predefinito) | ~200 MB | Ottimo equilibrio qualità/velocità. |
 | **MI-GAN** | Rimozione oggetti | ~28 MB | Molto leggero e veloce. |
 | **MobileSAM** | Selezione automatica | ~45 MB | Veloce, ideale per iniziare. |
-| **SAM 2 Tiny** | Selezione automatica | ~155 MB | Più preciso sui bordi, più lento. |
+| **SAM 2.1 Small** | Selezione automatica | ~155 MB | Più preciso sui bordi e su oggetti sottili, più lento. |
 | **Depth Anything V2 Small** | Profondità (sfocatura sfondo) | ~99 MB | Apache-2.0. Serve alla funzione Sfocatura. |
 
 
@@ -128,7 +128,7 @@ Ogni push su `main` compila l'APK con GitHub Actions (`.github/workflows/build.y
 L'app controlla all'avvio l'ultima Release e, se c'è una versione più nuova, mostra «Nuova versione disponibile». L'APK si scarica, poi Android chiede conferma e lo installa sopra quello esistente.
 Perché funzioni **tutte le build devono essere firmate con la stessa chiave**: la chiave sta nel segreto GitHub `KEYSTORE_BASE64` (Settings › Secrets and variables › Actions). Senza il segreto la build parte comunque ma non pubblica la Release. Chi copia il progetto (fork) usa la propria chiave e ottiene un'app separata.
 
-Le Release `model-v1`, `sam-v1`, `sam2-v1`, `migan-v1`, `depth-v1` contengono i modelli che l'app scarica: **non vanno cancellate**.
+Le Release `model-v1`, `sam-v1`, `sam21-v1`, `migan-v1`, `depth-v1` contengono i modelli che l'app scarica: **non vanno cancellate**.
 
 
 ## Aggiornare i modelli
@@ -145,7 +145,7 @@ I modelli e le librerie di terze parti hanno **licenze proprie**, che restano va
 | LaMa (versione ONNX) | Apache-2.0 | [advimman/lama](https://github.com/advimman/lama), [Carve/LaMa-ONNX](https://huggingface.co/Carve/LaMa-ONNX) |
 | MI-GAN | MIT | [Picsart-AI-Research/MI-GAN](https://github.com/Picsart-AI-Research/MI-GAN), [andraniksargsyan/migan](https://huggingface.co/andraniksargsyan/migan) |
 | MobileSAM | Apache-2.0 | [ChaoningZhang/MobileSAM](https://github.com/ChaoningZhang/MobileSAM), [Acly/MobileSAM](https://huggingface.co/Acly/MobileSAM) |
-| SAM 2 (Hiera Tiny) | Apache-2.0 | [facebookresearch/sam2](https://github.com/facebookresearch/sam2), [vietanhdev/segment-anything-2-onnx-models](https://huggingface.co/vietanhdev/segment-anything-2-onnx-models) |
+| SAM 2.1 (Hiera Small) | Apache-2.0 | [facebookresearch/sam2](https://github.com/facebookresearch/sam2), [vietanhdev/segment-anything-2.1-onnx-models](https://huggingface.co/vietanhdev/segment-anything-2.1-onnx-models) |
 | Depth Anything V2 Small | Apache-2.0 | [depth-anything/Depth-Anything-V2-Small](https://huggingface.co/depth-anything/Depth-Anything-V2-Small), [onnx-community/depth-anything-v2-small](https://huggingface.co/onnx-community/depth-anything-v2-small) |
 | ONNX Runtime | MIT | [microsoft/onnxruntime](https://github.com/microsoft/onnxruntime) |
 | Jetpack Compose / AndroidX | Apache-2.0 | [developer.android.com](https://developer.android.com/jetpack) |
