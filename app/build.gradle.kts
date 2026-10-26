@@ -31,7 +31,10 @@ android {
     }
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8: toglie il codice non usato (soprattutto le migliaia di icone di material-icons-extended)
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = if (releaseKeystore != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }
