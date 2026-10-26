@@ -372,6 +372,7 @@ fun EditorScreen(vm: EditorViewModel, onBack: () -> Unit, onSave: () -> Unit) {
                         Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator()
                             Text(vm.busyText, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 12.dp))
+                            if (vm.busyCancelable) androidx.compose.material3.TextButton(onClick = { vm.cancelBusy() }) { Text("Annulla") }
                         }
                     }
                 }

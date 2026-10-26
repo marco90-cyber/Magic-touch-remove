@@ -53,6 +53,9 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     var hasMask by mutableStateOf(false); private set
     var busy by mutableStateOf(false); private set
     var busyText by mutableStateOf(""); private set
+    /** True mentre lavora l'IA generativa (lenta): mostra il tasto Annulla. */
+    var busyCancelable by mutableStateOf(false); private set
+    fun cancelBusy() { Inpainter.cancelRequested = true }
     var strokeActive by mutableStateOf(false); private set
     var canUndo by mutableStateOf(false); private set
     var canRedo by mutableStateOf(false); private set
@@ -503,8 +506,14 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             message = "Scarica prima il modello IA dalla schermata iniziale"
             return
         }
+        val generative = ModelManager.active(ctx, Kind.INPAINT)?.id?.startsWith("sd") == true
         busy = true
-        busyText = "Rimozione in corso…"
+        busyCancelable = generative
+        busyText = if (generative) "IA generativa… può richiedere qualche minuto" else "Rimozione in corso…"
+        Inpainter.cancelRequested = false
+        Inpainter.notice = null
+        Inpainter.onProgress = if (generative) ({ s: String -> busyText = s; Notifier.progress(ctx, "IA generativa", s, -1) }) else null
+        if (generative) WorkKeeper.start(ctx, "IA generativa in corso…")
         viewModelScope.launch {
             val res = withContext(Dispatchers.Default) {
                 runCatching { Inpainter.get(ctx).inpaint(img, mk, expand.roundToInt(), ((1f - selSoft) * 10f).roundToInt()) }
@@ -518,15 +527,20 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                     mask = Bitmap.createBitmap(out.width, out.height, Bitmap.Config.ALPHA_8)
                     hasMask = false
                     version++
+                    Inpainter.notice?.let { message = it; Inpainter.notice = null }
                 }
             }.onFailure {
                 AppLog.log("IA", "fine con errore: ${it.stackTraceToString()}")
-                message = "Errore IA: ${it.message ?: it.javaClass.simpleName}"
+                message = if (it is java.util.concurrent.CancellationException) "Operazione annullata"
+                else "Errore IA: ${it.message ?: it.javaClass.simpleName}"
             }
-            if (Notifier.doneOn(ctx) && !AppState.foreground) {
+            Inpainter.onProgress = null
+            if (generative) WorkKeeper.stop(ctx)
+            if (Notifier.doneOn(ctx) && !AppState.foreground && res.exceptionOrNull() !is java.util.concurrent.CancellationException) {
                 if (res.isSuccess && res.getOrNull() != null) Notifier.done(ctx, "Modifica completata", "La foto è pronta: tocca per aprirla.")
                 else if (res.isFailure) Notifier.done(ctx, "Modifica non riuscita", "Qualcosa è andato storto: tocca per vedere.")
             }
+            busyCancelable = false
             busy = false
             if (tool == Tool.SELECT && image != null) prepareSegmenter(quiet = true)
         }

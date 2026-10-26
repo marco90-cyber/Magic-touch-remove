@@ -85,6 +85,33 @@ val OPT_SAM2 = ModelOption(
     ),
     "Apache-2.0", "huggingface.co/vietanhdev/segment-anything-2.1-onnx-models", "https://huggingface.co/vietanhdev/segment-anything-2.1-onnx-models", "sam21-v1"
 )
+// --- IA generativa (Stable Diffusion 1.5 Inpainting): ricostruisce solo la selezione, nessun testo ---
+private val SD_TE = ModelFile("sd15_text_encoder_fp16.onnx", 246_282_313L, 240_000_000L, listOf("$REPO/sd-v1/sd15_text_encoder_fp16.onnx"))
+private val SD_VE = ModelFile("sd15_vae_encoder.onnx", 136_773_223L, 130_000_000L, listOf("$REPO/sd-v1/sd15_vae_encoder.onnx"))
+private val SD_VD = ModelFile("sd15_vae_decoder.onnx", 265_178_078L, 250_000_000L, listOf("$REPO/sd-v1/sd15_vae_decoder.onnx"))
+private val SD_VOCAB = ModelFile("clip_vocab.json", 1_059_962L, 1_000_000L, listOf("$REPO/sd-v1/clip_vocab.json"))
+private val SD_MERGES = ModelFile("clip_merges.txt", 524_619L, 500_000L, listOf("$REPO/sd-v1/clip_merges.txt"))
+private val SD_UNET = ModelFile("sd15_inpaint_unet_fp16.onnx", 1_720_761_519L, 1_700_000_000L, listOf("$REPO/sd-v1/sd15_inpaint_unet_fp16.onnx"))
+private val SD_UNET_LCM = ModelFile("sd15_inpaint_lcm_unet_fp16.onnx", 1_720_783_260L, 1_700_000_000L, listOf("$REPO/sd-v1/sd15_inpaint_lcm_unet_fp16.onnx"))
+private val SD_NSFW = ModelFile("nsfw_vit_fp32.onnx", 343_463_984L, 340_000_000L, listOf("$REPO/nsfw-v1/nsfw_vit_fp32.onnx"))
+private val SD_SHARED = listOf(SD_TE, SD_VE, SD_VD, SD_VOCAB, SD_MERGES, SD_NSFW)
+
+val OPT_SD = ModelOption(
+    "sd15", Kind.INPAINT, "Stable Diffusion 1.5 · Generativo", "Il più creativo · sperimentale",
+    "IA generativa a diffusione: ricostruisce lo sfondo con dettagli realistici in aree grandi o complesse (non si può scrivere un testo) e controlla che il risultato sia appropriato. " +
+        "Molto pesante (~2,4 GB) e lenta: serve un telefono potente con molta RAM (almeno 8 GB). Non è il modello predefinito.",
+    listOf("Generativo", "Sperimentale", "Molto pesante"),
+    SD_SHARED + SD_UNET, "CreativeML OpenRAIL-M",
+    "huggingface.co/stable-diffusion-v1-5/stable-diffusion-inpainting", "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-inpainting", "sd-v1"
+)
+val OPT_SDLCM = ModelOption(
+    "sd15lcm", Kind.INPAINT, "Stable Diffusion 1.5 LCM · Generativo veloce", "Generativo più rapido · sperimentale",
+    "Stessa IA generativa ma ottimizzata a 4 passaggi (LCM): molto più rapida di quella standard, con qualità leggermente inferiore. " +
+        "Pesante (~2,4 GB): serve un telefono potente con molta RAM (almeno 8 GB). Non è il modello predefinito.",
+    listOf("Generativo", "Sperimentale", "Più veloce del generativo standard"),
+    SD_SHARED + SD_UNET_LCM, "CreativeML OpenRAIL-M + OpenRAIL++ (LCM-LoRA)",
+    "huggingface.co/latent-consistency/lcm-lora-sdv1-5", "https://huggingface.co/latent-consistency/lcm-lora-sdv1-5", "sd-v1"
+)
 val OPT_DEPTH = ModelOption(
     "depth", Kind.DEPTH, "Depth Anything V2 Small", "Mappa di profondità",
     "Analizza la foto e capisce cosa è vicino e cosa è lontano: serve alla sfocatura dello sfondo, per sfocare in modo graduale come una vera fotocamera.",
@@ -93,7 +120,7 @@ val OPT_DEPTH = ModelOption(
         listOf("https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model.onnx", "$REPO/depth-v1/depth_anything_v2_small.onnx"))),
     "Apache-2.0", "huggingface.co/depth-anything/Depth-Anything-V2-Small", "https://huggingface.co/depth-anything/Depth-Anything-V2-Small", "depth-v1"
 )
-val ALL_OPTIONS = listOf(OPT_LAMA, OPT_MIGAN, OPT_MOBILESAM, OPT_SAM2, OPT_DEPTH)
+val ALL_OPTIONS = listOf(OPT_LAMA, OPT_MIGAN, OPT_SD, OPT_SDLCM, OPT_MOBILESAM, OPT_SAM2, OPT_DEPTH)
 private val ALL = ALL_OPTIONS.flatMap { it.files }.distinct()
 
 /**
@@ -173,14 +200,13 @@ object ModelManager {
     fun latestVersionOf(ctx: Context, o: ModelOption) = o.files.maxOf { usableRemote(ctx, it)?.version ?: 0 }
     fun notesOf(ctx: Context, o: ModelOption) = o.files.firstNotNullOfOrNull { usableRemote(ctx, it)?.notes }
 
-    /** Rimuove i file di modelli non più usati (IA generativa, filtro, SAM 2 Tiny) rimasti sul telefono. */
+    /** Rimuove i file di modelli non più usati (SAM 2 Tiny) rimasti sul telefono. */
     private fun purgeLegacy(ctx: Context) {
         runCatching {
             File(ctx.filesDir, "models").listFiles()?.forEach { f ->
                 val n = f.name
-                if (n.startsWith("sd15_") || n.startsWith("clip_") || n.startsWith("nsfw_") || n.startsWith("sam2_hiera_tiny")) { f.delete() }
+                if (n.startsWith("sam2_hiera_tiny")) { f.delete() }
             }
-            ctx.deleteFile("sd_progress.txt")
         }
     }
 

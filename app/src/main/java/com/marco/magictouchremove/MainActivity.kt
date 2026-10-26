@@ -77,6 +77,16 @@ class MainActivity : ComponentActivity() {
         ModelManager.init(applicationContext)
         AppLog.init(applicationContext)
         Accel.init(applicationContext)
+        SdDiag.file = java.io.File(filesDir, "sd_progress.txt")
+        SdDiag.avail = {
+            val mi = android.app.ActivityManager.MemoryInfo()
+            (getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(mi)
+            "RAM libera ${mi.availMem shr 20} MB su ${mi.totalMem shr 20} MB"
+        }
+        SdDiag.takeCrash()?.let { c ->
+            AppLog.log("IA", "chiusura anomala durante: ${c.replace("\n", " · ")}")
+            android.widget.Toast.makeText(this, "L'IA generativa è stata chiusa dal sistema (memoria insufficiente). Prova la versione LCM o LaMa.", android.widget.Toast.LENGTH_LONG).show()
+        }
         ModelManager.checkUpdates(applicationContext)   // controlla se ci sono nuove versioni dei modelli
         setContent {
             MagicTheme(dark = ThemeSettings.isDark()) {

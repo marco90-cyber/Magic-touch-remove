@@ -163,6 +163,11 @@ abstract class Inpainter {
 
     companion object {
         const val SIZE = 512
+        /** Avanzamento per la schermata di attesa (solo IA generativa). */
+        @Volatile var onProgress: ((String) -> Unit)? = null
+        /** Avviso da mostrare dopo l'elaborazione (es. risultato generativo sostituito dalla rimozione standard). */
+        @Volatile var notice: String? = null
+        @Volatile var cancelRequested: Boolean = false
         @Volatile private var instance: Inpainter? = null
         @Volatile private var instanceId: String? = null
 
@@ -175,6 +180,11 @@ abstract class Inpainter {
                 val path = ModelManager.file(ctx, opt.files[0]).absolutePath
                 instance = when (opt.id) {
                     "migan" -> MiganInpainter(path)
+                    "sd15", "sd15lcm" -> SdInpainter(
+                        opt.files.associate { it.name to ModelManager.file(ctx, it).absolutePath },
+                        lcm = opt.id == "sd15lcm",
+                        lamaPath = if (ModelManager.installed(ctx, OPT_LAMA)) ModelManager.file(ctx, OPT_LAMA.files[0]).absolutePath else null
+                    )
                     else -> LamaInpainter(path)
                 }
                 instanceId = opt.id

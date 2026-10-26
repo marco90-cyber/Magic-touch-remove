@@ -40,6 +40,7 @@ Tutto gira **sul telefono**: le foto non vengono mai inviate a nessun server.
 - **Cancella** con il tasto dedicato, oppure modalità **AUTO** che parte appena alzi il dito.
 - Più modelli tra cui scegliere, dal più veloce al più creativo (vedi [i modelli](#i-modelli-di-intelligenza-artificiale)).
 - Per la massima precisione l'app ritaglia la zona attorno alla maschera, la ricostruisce a 512×512 e reincolla il risultato sulla foto sostituendo solo i pixel selezionati.
+- **IA generativa** (Stable Diffusion 1.5, sperimentale): rigenera **solo la zona selezionata** con dettagli realistici, partendo dal riempimento di LaMa. Non si può scrivere nessun testo.
 - **Sfocatura sfondo** (come una fotocamera): mappa di profondità con IA, tocco per scegliere il soggetto a fuoco, apertura regolabile.
 
 **Comodità**
@@ -83,6 +84,12 @@ Tieni premuto sul tasto **Selezione** per aprire il pannello:
 Nel pannello di **Selezione** muovi il cursore **Includi ombra**: l'app aggiunge alla selezione le zone vicine all'oggetto che sono più scure ma dello stesso colore del terreno.
 Funziona meglio su superfici semplici (asfalto, pavimento, muro, sabbia); su sfondi molto colorati o scene molto scure regola il cursore o seleziona l'ombra con il Pennello.
 
+### Usare l'IA generativa
+1. In **Impostazioni › Modelli IA** scarica e scegli *Stable Diffusion 1.5 LCM* (più veloce, consigliato) o *Stable Diffusion 1.5* (più dettagliato, ~2,4 GB; serve un telefono con molta RAM).
+2. Seleziona l'oggetto e tocca **Cancella AI**: LaMa riempie il buco, poi Stable Diffusion rigenera **solo la selezione** con texture realistiche. Non c'è nessun campo di testo.
+3. Un controllo finale confronta il risultato con la foto di partenza: se l'IA avesse generato qualcosa di esplicito che prima non c'era, viene usato il risultato di LaMa al posto di quello generativo. Le foto normali non vengono mai bloccate.
+4. L'elaborazione richiede da qualche decina di secondi a qualche minuto; si può **annullare**.
+
 ### Sfocare lo sfondo
 1. Scarica il modello **Depth Anything V2 Small** da **Impostazioni › Modelli IA** (~99 MB).
 2. Apri la foto e tocca **Sfocatura** nella barra degli strumenti: l'app analizza la profondità.
@@ -108,6 +115,8 @@ I modelli non sono nell'APK: si scaricano dall'app (con verifica SHA-256) e si p
 | **MI-GAN** | Rimozione oggetti | ~28 MB | Molto leggero e veloce. |
 | **MobileSAM** | Selezione automatica | ~45 MB | Veloce, ideale per iniziare. |
 | **SAM 2.1 Small** | Selezione automatica | ~155 MB | Più preciso sui bordi e su oggetti sottili, più lento. |
+| **Stable Diffusion 1.5 Inpainting** | IA generativa | ~2,4 GB | Sperimentale, 20 passaggi. Richiede molta RAM (≥ 8 GB). |
+| **Stable Diffusion 1.5 LCM** | IA generativa veloce | ~2,4 GB | 4 passaggi, consigliato sui telefoni. |
 | **Depth Anything V2 Small** | Profondità (sfocatura sfondo) | ~99 MB | Apache-2.0. Serve alla funzione Sfocatura. |
 
 
@@ -128,7 +137,7 @@ Ogni push su `main` compila l'APK con GitHub Actions (`.github/workflows/build.y
 L'app controlla all'avvio l'ultima Release e, se c'è una versione più nuova, mostra «Nuova versione disponibile». L'APK si scarica, poi Android chiede conferma e lo installa sopra quello esistente.
 Perché funzioni **tutte le build devono essere firmate con la stessa chiave**: la chiave sta nel segreto GitHub `KEYSTORE_BASE64` (Settings › Secrets and variables › Actions). Senza il segreto la build parte comunque ma non pubblica la Release. Chi copia il progetto (fork) usa la propria chiave e ottiene un'app separata.
 
-Le Release `model-v1`, `sam-v1`, `sam21-v1`, `migan-v1`, `depth-v1` contengono i modelli che l'app scarica: **non vanno cancellate**.
+Le Release `model-v1`, `sam-v1`, `sam21-v1`, `migan-v1`, `depth-v1`, `sd-v1`, `nsfw-v1` contengono i modelli che l'app scarica: **non vanno cancellate**.
 
 
 ## Aggiornare i modelli
@@ -146,6 +155,9 @@ I modelli e le librerie di terze parti hanno **licenze proprie**, che restano va
 | MI-GAN | MIT | [Picsart-AI-Research/MI-GAN](https://github.com/Picsart-AI-Research/MI-GAN), [andraniksargsyan/migan](https://huggingface.co/andraniksargsyan/migan) |
 | MobileSAM | Apache-2.0 | [ChaoningZhang/MobileSAM](https://github.com/ChaoningZhang/MobileSAM), [Acly/MobileSAM](https://huggingface.co/Acly/MobileSAM) |
 | SAM 2.1 (Hiera Small) | Apache-2.0 | [facebookresearch/sam2](https://github.com/facebookresearch/sam2), [vietanhdev/segment-anything-2.1-onnx-models](https://huggingface.co/vietanhdev/segment-anything-2.1-onnx-models) |
+| Stable Diffusion 1.5 Inpainting | CreativeML OpenRAIL-M | [stable-diffusion-v1-5/stable-diffusion-inpainting](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-inpainting) |
+| LCM-LoRA (versione veloce) | OpenRAIL++ | [latent-consistency/lcm-lora-sdv1-5](https://huggingface.co/latent-consistency/lcm-lora-sdv1-5) |
+| Falconsai/nsfw_image_detection (controllo finale) | Apache-2.0 | [Falconsai/nsfw_image_detection](https://huggingface.co/Falconsai/nsfw_image_detection) |
 | Depth Anything V2 Small | Apache-2.0 | [depth-anything/Depth-Anything-V2-Small](https://huggingface.co/depth-anything/Depth-Anything-V2-Small), [onnx-community/depth-anything-v2-small](https://huggingface.co/onnx-community/depth-anything-v2-small) |
 | ONNX Runtime | MIT | [microsoft/onnxruntime](https://github.com/microsoft/onnxruntime) |
 | Jetpack Compose / AndroidX | Apache-2.0 | [developer.android.com](https://developer.android.com/jetpack) |
