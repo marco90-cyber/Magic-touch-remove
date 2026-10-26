@@ -31,7 +31,6 @@ android {
     }
     buildTypes {
         release {
-            // R8 disattivato: con la riduzione del codice l'app non si avviava (v1.82-1.83)
             isMinifyEnabled = false
             signingConfig = if (releaseKeystore != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }

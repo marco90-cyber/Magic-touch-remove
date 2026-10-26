@@ -70,7 +70,6 @@ class MobileSamSegmenter(encoderPath: String, decoderPath: String) : Segmenter()
         val scaled = Bitmap.createScaledBitmap(img, rw, rh, true)
         val px = IntArray(rw * rh)
         scaled.getPixels(px, 0, rw, 0, 0, rw, rh)
-        if (scaled !== img) scaled.recycle()
         val arr = FloatArray(rw * rh * 3)
         for (i in px.indices) {
             val p = px[i]
@@ -135,8 +134,7 @@ class MobileSamSegmenter(encoderPath: String, decoderPath: String) : Segmenter()
                                     val off = idx * w * h
                                     val out = BooleanArray(w * h)
                                     var any = false
-                                    val mv = FloatArray(w * h); masks.position(off); masks.get(mv)
-                                    for (i in out.indices) if (mv[i] > 0f) { out[i] = true; any = true }
+                                    for (i in out.indices) if (masks.get(off + i) > 0f) { out[i] = true; any = true }
                                     if (any) out else null
                                 }
                             }
@@ -171,7 +169,6 @@ class Sam2Segmenter(encoderPath: String, decoderPath: String) : Segmenter() {
         val scaled = Bitmap.createScaledBitmap(img, TARGET, TARGET, true)
         val px = IntArray(TARGET * TARGET)
         scaled.getPixels(px, 0, TARGET, 0, 0, TARGET, TARGET)
-        if (scaled !== img) scaled.recycle()
         val plane = TARGET * TARGET
         val arr = FloatArray(3 * plane)
         val mean = floatArrayOf(0.485f, 0.456f, 0.406f)
@@ -248,8 +245,7 @@ class Sam2Segmenter(encoderPath: String, decoderPath: String) : Segmenter() {
     }
 
     /** Ingrandimento bilineare dei valori (logit) 256×256 a w×h, poi soglia a 0. */
-    private fun upsample(buf: java.nio.FloatBuffer, off: Int, w: Int, h: Int): BooleanArray? {
-        val m = FloatArray(256 * 256); buf.position(off); buf.get(m)
+    private fun upsample(m: java.nio.FloatBuffer, off: Int, w: Int, h: Int): BooleanArray? {
         val out = BooleanArray(w * h)
         var any = false
         val xi0 = IntArray(w); val xi1 = IntArray(w); val xf = FloatArray(w)
@@ -260,11 +256,11 @@ class Sam2Segmenter(encoderPath: String, decoderPath: String) : Segmenter() {
         for (y in 0 until h) {
             val fy = ((y + 0.5f) * 256f / h - 0.5f).coerceIn(0f, 255f)
             val y0 = fy.toInt(); val y1 = minOf(255, y0 + 1); val ay = fy - y0
-            val r0 = y0 * 256; val r1 = y1 * 256
+            val r0 = off + y0 * 256; val r1 = off + y1 * 256
             for (x in 0 until w) {
                 val a = xf[x]
-                val top = m[r0 + xi0[x]] * (1 - a) + m[r0 + xi1[x]] * a
-                val bot = m[r1 + xi0[x]] * (1 - a) + m[r1 + xi1[x]] * a
+                val top = m.get(r0 + xi0[x]) * (1 - a) + m.get(r0 + xi1[x]) * a
+                val bot = m.get(r1 + xi0[x]) * (1 - a) + m.get(r1 + xi1[x]) * a
                 if (top * (1 - ay) + bot * ay > 0f) { out[y * w + x] = true; any = true }
             }
         }
