@@ -23,6 +23,9 @@ sealed interface ModelState {
 
 enum class Kind { INPAINT, SELECT, DEPTH }
 
+/** Chiude tutti i modelli caricati in memoria. */
+fun releaseAll() { Inpainter.release(); Segmenter.release(); Depth.release() }
+
 val Kind.label: String get() = when (this) {
     Kind.INPAINT -> "Rimozione oggetti"
     Kind.SELECT -> "Selezione automatica"
@@ -220,7 +223,7 @@ object ModelManager {
     /** Elimina un modello. Ritorna false se è in corso un download. */
     fun delete(ctx: Context, o: ModelOption): Boolean {
         if (_state.value is ModelState.Downloading) return false
-        Inpainter.release(); Segmenter.release(); Depth.release()
+        releaseAll()
         val keep = ALL_OPTIONS.filter { it !== o && installed(ctx, it) }.flatMap { it.files }.toSet()
         o.files.filter { it !in keep }.forEach { deleteFile(ctx, it) }
         _state.value = if (anyReady(ctx)) ModelState.Ready else ModelState.Missing
@@ -238,7 +241,7 @@ object ModelManager {
     /** Elimina tutti i modelli scaricati. Ritorna false se è in corso un download. */
     fun deleteAll(ctx: Context): Boolean {
         if (_state.value is ModelState.Downloading) return false
-        Inpainter.release(); Segmenter.release(); Depth.release()
+        releaseAll()
         ALL.forEach { deleteFile(ctx, it) }
         prefs(ctx).edit().clear().apply()
         _state.value = ModelState.Missing
@@ -308,7 +311,7 @@ object ModelManager {
         scope.launch {
             val ok = mutableListOf<String>(); val bad = mutableListOf<String>()
             try {
-                Inpainter.release(); Segmenter.release(); Depth.release()
+                releaseAll()
                 var total = 0L
                 val items = uris.map { u ->
                     val (name, size) = app.contentResolver.query(u, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME, android.provider.OpenableColumns.SIZE), null, null, null)
@@ -413,7 +416,7 @@ object ModelManager {
         WorkKeeper.start(app, "Download dei modelli IA")
         scope.launch {
           try {
-            if (replacing) { Inpainter.release(); Segmenter.release(); Depth.release() }
+            if (replacing) { releaseAll() }
             var lastPct = -1
             var doneBefore = 0L
             for (m in targets) {

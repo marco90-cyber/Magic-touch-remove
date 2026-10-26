@@ -26,18 +26,22 @@ object BlurEngine {
         val coc = FloatArray(w * h)
         for (i in coc.indices) {
             val e = ((abs(depth[i] - focus) - tol) / (1f - tol)).coerceIn(0f, 1f).pow(0.8f)
-            coc[i] = rMax * e * (1f - (sj?.get(i) ?: 0f))
+            coc[i] = rMax * e
         }
+        if (sj != null) for (i in coc.indices) coc[i] *= 1f - sj[i]
         val step = rMax / LEVELS
         val out = src.copyOf()
-        var prev = src
+        // buffer riutilizzati tra i livelli: niente nuove allocazioni da 3 array grandi quanto la foto per ogni livello
+        var prev = src.copyOf()
+        var cur = IntArray(w * h)
+        val a = IntArray(w * h); val t = IntArray(w * h)
         for (k in 1..LEVELS) {
-            val cur = blur(src, w, h, step * k)
+            blur(src, w, h, step * k, cur, a, t)
             for (i in coc.indices) {
                 val f = coc[i] / step
                 if (f > k - 1 && (f <= k || k == LEVELS)) out[i] = mix(prev[i], cur[i], (f - (k - 1)).coerceIn(0f, 1f))
             }
-            prev = cur
+            val sw = prev; prev = cur; cur = sw
         }
         return out
     }
@@ -57,10 +61,9 @@ object BlurEngine {
     }
 
     /** Sfocatura quasi gaussiana (due passate di box blur separabile) con raggio [r] in pixel. */
-    private fun blur(src: IntArray, w: Int, h: Int, r: Float): IntArray {
+    private fun blur(src: IntArray, w: Int, h: Int, r: Float, out: IntArray, a: IntArray, t: IntArray) {
         val b = max(1, (r * 0.6f).roundToInt())
-        val out = IntArray(w * h)
-        val a = IntArray(w * h); val t = IntArray(w * h)
+        java.util.Arrays.fill(out, 0)
         for (c in 0..2) {
             val shift = 16 - 8 * c
             for (i in a.indices) a[i] = (src[i] shr shift) and 255
@@ -68,7 +71,6 @@ object BlurEngine {
             for (i in a.indices) out[i] = out[i] or (a[i].coerceIn(0, 255) shl shift)
         }
         for (i in out.indices) out[i] = out[i] or (255 shl 24)
-        return out
     }
 
     private fun boxH(s: IntArray, d: IntArray, w: Int, h: Int, b: Int) {

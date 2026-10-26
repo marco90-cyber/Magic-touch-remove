@@ -24,7 +24,9 @@ object Depth {
     }
 
     /** Mappa di profondità 0..1 (1 = vicino) con le stesse dimensioni di [bmp]. */
-    fun estimate(ctx: Context, bmp: Bitmap): FloatArray {
+    fun estimate(ctx: Context, bmp: Bitmap): FloatArray = synchronized(this) { estimateLocked(ctx, bmp) }
+
+    private fun estimateLocked(ctx: Context, bmp: Bitmap): FloatArray {
         val s = get(ctx)
         val sc = 518f / max(bmp.width, bmp.height)
         val tw = (bmp.width * sc / 14f).roundToInt().coerceAtLeast(1) * 14

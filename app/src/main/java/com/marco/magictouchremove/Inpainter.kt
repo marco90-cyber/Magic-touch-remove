@@ -211,6 +211,7 @@ internal class LamaInpainter(path: String) : Inpainter() {
     fun fill(px: IntArray, hole: BooleanArray, n: Int): IntArray = run512(px, hole, n)
     fun shut() = close()
 
+    @Synchronized
     override fun run512(px: IntArray, hole: BooleanArray, n: Int): IntArray {
         val plane = n * n
         val imgArr = FloatArray(3 * plane)
@@ -228,22 +229,24 @@ internal class LamaInpainter(path: String) : Inpainter() {
         OnnxTensor.createTensor(env, FloatBuffer.wrap(imgArr), shapeImg).use { ti ->
             OnnxTensor.createTensor(env, FloatBuffer.wrap(maskArr), shapeMask).use { tm ->
                 session.run(mapOf(imageInput to ti, maskInput to tm)).use { res ->
-                    @Suppress("UNCHECKED_CAST")
-                    val out = res[0].value as Array<Array<Array<FloatArray>>>
+                    // lettura diretta del buffer (niente array annidati da 1500 righe)
+                    val fb = (res[0] as OnnxTensor).floatBuffer
+                    val out = FloatArray(3 * plane); fb.get(out)
                     var mx = 0f
-                    for (c in 0 until 3) for (y in 0 until n) for (x in 0 until n) mx = max(mx, out[0][c][y][x])
+                    for (v in out) if (v > mx) mx = v
                     val k = if (mx <= 2f) 255f else 1f
-                    for (y in 0 until n) for (x in 0 until n) {
-                        val r = (out[0][0][y][x] * k).toInt().coerceIn(0, 255)
-                        val g = (out[0][1][y][x] * k).toInt().coerceIn(0, 255)
-                        val b = (out[0][2][y][x] * k).toInt().coerceIn(0, 255)
-                        outPx[y * n + x] = (255 shl 24) or (r shl 16) or (g shl 8) or b
+                    for (i in 0 until plane) {
+                        val r = (out[i] * k).toInt().coerceIn(0, 255)
+                        val g = (out[plane + i] * k).toInt().coerceIn(0, 255)
+                        val b = (out[2 * plane + i] * k).toInt().coerceIn(0, 255)
+                        outPx[i] = (255 shl 24) or (r shl 16) or (g shl 8) or b
                     }
                 }
             }
         }
         return outPx
     }
+    @Synchronized
     override fun close() { runCatching { session.close() } }
 }
 
@@ -251,14 +254,18 @@ internal class LamaInpainter(path: String) : Inpainter() {
 private class MiganInpainter(path: String) : Inpainter() {
     private val session = newSession(env, path)
 
+    @Synchronized
     override fun run512(px: IntArray, hole: BooleanArray, n: Int): IntArray {
         val plane = n * n
         val img = ByteBuffer.allocateDirect(3 * plane)
         val msk = ByteBuffer.allocateDirect(plane)
-        for (i in 0 until plane) img.put(i, ((px[i] shr 16) and 255).toByte())
-        for (i in 0 until plane) img.put(plane + i, ((px[i] shr 8) and 255).toByte())
-        for (i in 0 until plane) img.put(2 * plane + i, (px[i] and 255).toByte())
-        for (i in 0 until plane) msk.put(i, if (hole[i]) 0.toByte() else 255.toByte())
+        for (i in 0 until plane) {
+            val p = px[i]
+            img.put(i, ((p shr 16) and 255).toByte())
+            img.put(plane + i, ((p shr 8) and 255).toByte())
+            img.put(2 * plane + i, (p and 255).toByte())
+            msk.put(i, if (hole[i]) 0.toByte() else 255.toByte())
+        }
         val outPx = IntArray(plane)
         val n8 = n.toLong()
         OnnxTensor.createTensor(env, img, longArrayOf(1, 3, n8, n8), OnnxJavaType.UINT8).use { ti ->
@@ -276,5 +283,6 @@ private class MiganInpainter(path: String) : Inpainter() {
         }
         return outPx
     }
+    @Synchronized
     override fun close() { runCatching { session.close() } }
 }

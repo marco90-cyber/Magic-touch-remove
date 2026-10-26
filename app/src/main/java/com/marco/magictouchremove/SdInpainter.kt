@@ -93,8 +93,8 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
      * sembra esplicito E lo è molto più della foto di partenza. Così le foto normali non vengono mai bloccate
      * (i falsi allarmi su legno, pelle, ecc. compaiono già nella foto di partenza e si annullano nel confronto).
      */
-    private val NSFW_LIMIT = 0.5f
-    private val NSFW_RISE = 0.3f
+    private val nsfwLimit = 0.5f
+    private val nsfwRise = 0.3f
     private fun path(name: String) = paths[name] ?: error("file mancante: $name")
     private val unetName = if (lcm) "sd15_inpaint_lcm_unet_fp16.onnx" else "sd15_inpaint_unet_fp16.onnx"
 
@@ -137,7 +137,6 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
         progress("IA generativa · preparazione del testo…")
         val tok = ClipTokenizer(File(path("clip_vocab.json")).readText(), File(path("clip_merges.txt")).readText())
         // Nessun testo libero (scelta di sicurezza): l'IA può solo ricostruire lo sfondo. Si parte dal riempimento di LaMa e si rifinisce.
-        val rebuild = true
         val text = "empty background, seamless natural continuation of the surrounding scene, no objects"
         val (cond, unc) = session("sd15_text_encoder_fp16.onnx").use { s ->
             val c = embed(s, tok, text)
@@ -158,7 +157,7 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
         // base: riempimento di LaMa (solo se si ricostruisce lo sfondo e LaMa è scaricato)
         var base: IntArray? = null
         val lp = lamaPath
-        if (rebuild && lp != null) {
+        if (lp != null) {
             progress("IA generativa · sfondo di base…")
             base = runCatching {
                 val l = LamaInpainter(lp)
@@ -291,7 +290,7 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
         checkCancel()
         progress("IA generativa · controllo finale…")
         val resultScore = safety(out, n, "risultato")
-        if (resultScore >= NSFW_LIMIT && resultScore - photoScore >= NSFW_RISE) {
+        if (resultScore >= nsfwLimit && resultScore - photoScore >= nsfwRise) {
             AppLog.log("IA", "risultato generativo scartato (${"%.2f".format(resultScore)} contro ${"%.2f".format(photoScore)} della foto)")
             Inpainter.notice = "Il risultato dell'IA generativa non era adatto: è stata usata la rimozione standard."
             return base ?: error("il risultato dell'IA generativa non era adatto e la rimozione standard (LaMa) non è scaricata")
@@ -348,7 +347,7 @@ class SdInpainter(private val paths: Map<String, String>, private val lcm: Boole
         // all[0] = foto intera; all[1..5] = ritagli. Punteggio effettivo = max(intera, secondo ritaglio più alto)
         val crops = all.drop(1).sortedDescending()
         val score = maxOf(all[0], crops.getOrElse(1) { 0f })
-        AppLog.log("IA", "controllo di sicurezza ($what): intera ${"%.3f".format(all[0])} · ritagli ${all.drop(1).joinToString(" ") { "%.2f".format(it) }} → ${"%.3f".format(score)} (soglia ${"%.2f".format(NSFW_LIMIT)})")
+        AppLog.log("IA", "controllo di sicurezza ($what): intera ${"%.3f".format(all[0])} · ritagli ${all.drop(1).joinToString(" ") { "%.2f".format(it) }} → ${"%.3f".format(score)} (soglia ${"%.2f".format(nsfwLimit)})")
         return score
     }
 

@@ -61,7 +61,6 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     var canRedo by mutableStateOf(false); private set
     var message by mutableStateOf<String?>(null)
     var comparing by mutableStateOf(false)
-    /** True quando un controllo di sicurezza ha bloccato il processo: l'app mostra la schermata nera di blocco. */
     /** Pixel in più rispetto al bordo della selezione automatica (0/5/10/15). */
     var selExtra by mutableIntStateOf(0); private set
     /** Durezza della selezione: 1 = bordo netto; meno = il riempimento si fonde in modo graduale con la foto. */
@@ -93,6 +92,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- caricamento ----
     fun load(uri: Uri) {
+        if (busy) return
         viewModelScope.launch {
             busy = true
             try {
@@ -157,9 +157,10 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun saveProject() {
         val im = image ?: return
         val src = source ?: return
-        val same = !hasChanges && im === src
-        val snapImg = im.copy(Bitmap.Config.ARGB_8888, false) ?: return
-        val snapSrc = if (same) snapImg else src
+        if (busy) return
+        // le bitmap non vengono mai modificate sul posto (ogni modifica ne crea una nuova): non serve copiarle
+        val snapImg = im
+        val snapSrc = src
         val w = originalW; val h = originalH; val u = sourceUri?.toString()
         val ctx = getApplication<Application>()
         Thread { runCatching { ProjectStore.save(ctx, snapImg, snapSrc, w, h, u) } }.start()
@@ -167,6 +168,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Riprende il lavoro salvato. */
     fun resumeProject() {
+        if (busy) return
         viewModelScope.launch {
             busy = true
             try {
@@ -192,6 +194,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun close() {
+        if (busy) { Inpainter.cancelRequested = true; message = "Attendi la fine dell'elaborazione"; return }
         clearBlurCaches()
         restored = false
         ProjectStore.clear(getApplication())
@@ -358,7 +361,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         if (depthFor === img && depthMap != null) { buildPreviewBase(img); updateBlurPreview(); return }
-        if (busy) return
+        if (busy) { tool = Tool.BRUSH; return }
         busy = true
         busyText = "Analisi della profondità…"
         viewModelScope.launch {
@@ -423,9 +426,11 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             if (image !== img) return@launch
             subject = sj
             focusDepth = if (sj != null && sj.count { it } > 50) {
-                val vals = ArrayList<Float>()
-                for (i in sj.indices step 7) if (sj[i]) vals.add(d[i])
-                vals.sort(); vals[vals.size / 2]
+                var k = 0
+                for (i in sj.indices step 7) if (sj[i]) k++
+                val vals = FloatArray(k); k = 0
+                for (i in sj.indices step 7) if (sj[i]) vals[k++] = d[i]
+                vals.sort(); if (vals.isEmpty()) depthAround(d, img.width, img.height, p) else vals[vals.size / 2]
             } else depthAround(d, img.width, img.height, p)
             resampleSubject(img)
             updateBlurPreview()
@@ -440,6 +445,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val fd = focusDepth; val tol = blurTol; val fn = BlurEngine.fnum(blurAmount); val sj = pvSubject
         blurJob?.cancel()
         blurJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(60)
             val out = withContext(Dispatchers.Default) { runCatching { BlurEngine.render(base, pw, ph, dp, fd, tol, sj, fn) }.getOrNull() } ?: return@launch
             blurPreview = Bitmap.createBitmap(out, pw, ph, Bitmap.Config.ARGB_8888)
             blurPreviewFor = img
@@ -513,7 +519,11 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         Inpainter.cancelRequested = false
         Inpainter.notice = null
         Inpainter.onProgress = if (generative) ({ s: String -> busyText = s; Notifier.progress(ctx, "IA generativa", s, -1) }) else null
-        if (generative) WorkKeeper.start(ctx, "IA generativa in corso…")
+        if (generative) {
+            WorkKeeper.start(ctx, "IA generativa in corso…")
+            // più RAM libera per Stable Diffusion: i modelli di selezione e profondità si ricaricano quando servono
+            Segmenter.release(); Depth.release()
+        }
         viewModelScope.launch {
             val res = withContext(Dispatchers.Default) {
                 runCatching { Inpainter.get(ctx).inpaint(img, mk, expand.roundToInt(), ((1f - selSoft) * 10f).roundToInt()) }
@@ -598,6 +608,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         val extra = selExtra; val shd = selShadow
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(120)
             val sel = withContext(Dispatchers.Default) { selectionBitmap(raw, img.width, img.height, extra, shd, img) }
             if (mask === cur) {
                 val copy = base.copy(Bitmap.Config.ALPHA_8, true)
@@ -826,7 +837,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                     r.update(uri, values, null, null)
                     message = "Salvata in Immagini/MagicTouchRemove (${bmp.width}×${bmp.height})"
                 }
-                if (onSaved != null) withContext(Dispatchers.Main) { onSaved() }
+                if (onSaved != null) withContext(Dispatchers.Main) { busy = false; onSaved() }
             } catch (e: Throwable) {
                 AppLog.log("ERRORE", "salvataggio: ${e.stackTraceToString()}")
                 message = "Errore salvataggio: ${e.message ?: e.javaClass.simpleName}"

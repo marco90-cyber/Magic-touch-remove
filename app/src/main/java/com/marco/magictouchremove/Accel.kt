@@ -43,7 +43,7 @@ object Accel {
     fun autoOff(): Boolean = ::app.isInitialized && prefs.getBoolean("auto_off", false)
     fun setEnabled(on: Boolean) {
         prefs.edit().putBoolean("use_npu", on).putBoolean("auto_off", false).apply()
-        Inpainter.release(); Segmenter.release(); Depth.release()
+        releaseAll()
     }
 
     /** Opzioni comuni per la CPU. */
