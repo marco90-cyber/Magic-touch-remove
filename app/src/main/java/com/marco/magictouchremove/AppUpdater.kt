@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
+import java.util.concurrent.atomic.AtomicInteger
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -24,7 +26,9 @@ sealed interface UpdateState {
     data object Checking : UpdateState
     data object UpToDate : UpdateState
     data class Available(val release: AppRelease) : UpdateState
-    data class Downloading(val release: AppRelease, val progress: Float) : UpdateState
+    data class Downloading(val release: AppRelease, val progress: Float, val done: Long = 0, val total: Long = 0) : UpdateState
+    /** Download fermato con «Pausa»: «Riprendi» continua da dove si era fermato. */
+    data class Paused(val release: AppRelease, val progress: Float, val done: Long = 0, val total: Long = 0) : UpdateState
     data class Ready(val release: AppRelease, val file: File) : UpdateState
     data class Error(val message: String) : UpdateState
 }
@@ -64,7 +68,7 @@ object AppUpdater {
 
     fun check(ctx: Context, silent: Boolean = false) {
         val s = _state.value
-        if (s is UpdateState.Checking || s is UpdateState.Downloading || s is UpdateState.Ready) return
+        if (s is UpdateState.Checking || s is UpdateState.Downloading || s is UpdateState.Paused || s is UpdateState.Ready) return
         val app = ctx.applicationContext
         if (!silent) _state.value = UpdateState.Checking
         scope.launch {
@@ -100,53 +104,130 @@ object AppUpdater {
         }
     }
 
-    /** Scarica l'APK della versione disponibile; a fine download tenta subito l'installazione. */
+    private val run = AtomicInteger()
+    @Volatile private var conn: HttpURLConnection? = null
+    @Volatile private var cancelledRun = -1
+    private val lock = Any()
+
+    private fun partFile(app: Context, rel: AppRelease) =
+        File(File(app.cacheDir, "updates").apply { mkdirs() }, "MagicTouchRemove-v${rel.name}.apk.part")
+
+    private fun setIf(id: Int, st: UpdateState) = synchronized(lock) { if (run.get() == id) _state.value = st }
+
+    /**
+     * Scarica (o riprende) l'APK della versione disponibile; a fine download tenta subito l'installazione.
+     * La ripresa usa le richieste HTTP «Range»: riparte dal punto in cui si era fermato.
+     */
     fun download(ctx: Context) {
         val app = ctx.applicationContext
         val rel = when (val s = _state.value) {
             is UpdateState.Available -> s.release
+            is UpdateState.Paused -> s.release
             is UpdateState.Error -> lastRelease
             else -> null
         } ?: return
-        _state.value = UpdateState.Downloading(rel, 0f)
+        lastRelease = rel
+        val part = partFile(app, rel)
+        val id = synchronized(lock) {
+            val n = run.incrementAndGet()
+            val d0 = part.length()
+            _state.value = UpdateState.Downloading(rel, if (rel.size > 0) (d0.toFloat() / rel.size).coerceIn(0f, 0.99f) else 0f, d0, rel.size)
+            n
+        }
         scope.launch {
-            val dir = File(app.cacheDir, "updates").apply { mkdirs() }
-            dir.listFiles()?.forEach { it.delete() }
+            val dir = part.parentFile!!
+            dir.listFiles()?.forEach { if (it.name != part.name) it.delete() }
             val target = File(dir, "MagicTouchRemove-v${rel.name}.apk")
+            var done = part.length()
+            var total = rel.size
             try {
-                val conn = URL(rel.url).openConnection() as HttpURLConnection
-                conn.connectTimeout = 20_000
-                conn.readTimeout = 30_000
-                conn.instanceFollowRedirects = true
-                try {
-                    if (conn.responseCode !in 200..299) error("HTTP ${conn.responseCode}")
-                    val total = conn.contentLengthLong.takeIf { it > 0 } ?: rel.size
-                    var done = 0L
-                    var last = 0L
-                    conn.inputStream.use { input ->
-                        target.outputStream().use { out ->
-                            val buf = ByteArray(128 * 1024)
-                            while (true) {
-                                val n = input.read(buf)
-                                if (n < 0) break
-                                out.write(buf, 0, n)
-                                done += n
-                                if (total > 0 && done - last > 256 * 1024) {
-                                    last = done
-                                    _state.value = UpdateState.Downloading(rel, (done.toFloat() / total).coerceIn(0f, 0.99f))
+                if (total > 0 && done > total) { part.delete(); done = 0 }
+                if (total <= 0 || done < total) {
+                    val c = URL(rel.url).openConnection() as HttpURLConnection
+                    c.connectTimeout = 20_000
+                    c.readTimeout = 30_000
+                    c.instanceFollowRedirects = true
+                    if (done > 0) c.setRequestProperty("Range", "bytes=$done-")
+                    conn = c
+                    try {
+                        val code = c.responseCode
+                        val append = when (code) {
+                            206 -> true
+                            in 200..299 -> { done = 0; false }
+                            else -> error("HTTP $code")
+                        }
+                        if (total <= 0) total = c.contentLengthLong.takeIf { it > 0 }?.let { it + if (append) done else 0L } ?: 0L
+                        var last = 0L
+                        c.inputStream.use { input ->
+                            FileOutputStream(part, append).use { out ->
+                                val buf = ByteArray(128 * 1024)
+                                while (run.get() == id) {
+                                    val n = input.read(buf)
+                                    if (n < 0) break
+                                    if (run.get() != id) break
+                                    out.write(buf, 0, n)
+                                    done += n
+                                    if (done - last > 256 * 1024) {
+                                        last = done
+                                        val p = if (total > 0) (done.toFloat() / total).coerceIn(0f, 0.99f) else 0f
+                                        setIf(id, UpdateState.Downloading(rel, p, done, total))
+                                    }
                                 }
                             }
                         }
+                    } finally {
+                        conn = null
+                        c.disconnect()
                     }
-                } finally { conn.disconnect() }
-                if (rel.size > 0 && target.length() != rel.size) error("file incompleto")
-                _state.value = UpdateState.Ready(rel, target)
-                if (canInstall(app)) install(app)
-            } catch (e: Exception) {
+                }
+                if (run.get() != id) {
+                    if (cancelledRun == id) part.delete()
+                    return@launch
+                }
+                if (rel.size > 0 && part.length() != rel.size) error("file incompleto")
                 target.delete()
-                _state.value = UpdateState.Error("Download non riuscito: ${e.message ?: e.javaClass.simpleName}")
+                if (!part.renameTo(target)) error("impossibile salvare il file")
+                setIf(id, UpdateState.Ready(rel, target))
+                if (run.get() == id && canInstall(app)) install(app)
+            } catch (e: Exception) {
+                if (run.get() != id) {
+                    if (cancelledRun == id) part.delete()
+                    return@launch
+                }
+                // Il file parziale resta: «Riprova» riprende da dove si era fermato
+                setIf(id, UpdateState.Error("Download interrotto: ${e.message ?: e.javaClass.simpleName}. Tocca «Riprova» per riprendere."))
             }
         }
+    }
+
+    /** Ferma il download tenendo la parte già scaricata. */
+    fun pause() {
+        synchronized(lock) {
+            val s = _state.value as? UpdateState.Downloading ?: return
+            run.incrementAndGet()
+            _state.value = UpdateState.Paused(s.release, s.progress, s.done, s.total)
+        }
+        try { conn?.disconnect() } catch (_: Exception) {}
+    }
+
+    /** Annulla il download ed elimina il file parziale. */
+    fun cancel(ctx: Context) {
+        val rel = when (val s = _state.value) {
+            is UpdateState.Downloading -> s.release
+            is UpdateState.Paused -> s.release
+            is UpdateState.Ready -> s.release
+            is UpdateState.Error -> lastRelease
+            else -> null
+        } ?: return
+        synchronized(lock) {
+            cancelledRun = run.get()
+            run.incrementAndGet()
+            _state.value = UpdateState.Available(rel)
+        }
+        try { conn?.disconnect() } catch (_: Exception) {}
+        val app = ctx.applicationContext
+        partFile(app, rel).delete()
+        File(partFile(app, rel).parentFile, "MagicTouchRemove-v${rel.name}.apk").delete()
     }
 
     fun canInstall(ctx: Context) = ctx.packageManager.canRequestPackageInstalls()

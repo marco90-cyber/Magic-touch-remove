@@ -145,6 +145,7 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
                 is UpdateState.Checking -> "Controllo in corso…"
                 is UpdateState.Available -> "Nuova versione disponibile: ${a.release.name}"
                 is UpdateState.Downloading -> "Download della versione ${a.release.name}… ${(a.progress * 100).toInt()}%"
+                is UpdateState.Paused -> "Download della versione ${a.release.name} in pausa (${(a.progress * 100).toInt()}%)"
                 is UpdateState.Ready -> "Versione ${a.release.name} scaricata, pronta da installare."
                 is UpdateState.UpToDate -> "L'app è aggiornata (versione $version)."
                 is UpdateState.Error -> a.message
@@ -153,6 +154,12 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium,
             color = if (appState is UpdateState.Available || appState is UpdateState.Ready) cs.primary else cs.onSurfaceVariant
         )
+        if (appState is UpdateState.Paused) {
+            Button(
+                onClick = { AppUpdater.clearPostponed(); AppUpdater.download(ctx); page = Page.MAIN },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Riprendi il download") }
+        }
         if (appState is UpdateState.Available || appState is UpdateState.Ready) {
             Button(
                 onClick = {
@@ -165,7 +172,7 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
         }
         OutlinedButton(
             onClick = { AppUpdater.check(ctx) },
-            enabled = appState !is UpdateState.Checking && appState !is UpdateState.Downloading,
+            enabled = appState !is UpdateState.Checking && appState !is UpdateState.Downloading && appState !is UpdateState.Paused,
             modifier = Modifier.fillMaxWidth()
         ) { Text(if (appState is UpdateState.Checking) "Controllo in corso…" else "Controlla aggiornamenti dell'app") }
 
