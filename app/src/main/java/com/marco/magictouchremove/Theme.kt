@@ -52,7 +52,12 @@ private val MtShapes = Shapes(
 /** Tema Material 3: segue chiaro/scuro del telefono. */
 @Composable
 fun MagicTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (dark) Dark else Light, shapes = MtShapes, content = content)
+    // colori e interruttori di MLTheme, come in MLauncher
+    val ml = com.marco.mltheme.MLThemeSettings.get(androidx.compose.ui.platform.LocalContext.current)
+    val scheme = com.marco.mltheme.mlColorScheme(if (dark) "dark" else "light", ml.accent)
+    androidx.compose.runtime.CompositionLocalProvider(com.marco.mltheme.LocalSwitchStyle provides ml.switchStyle) {
+        MaterialTheme(colorScheme = scheme, shapes = MtShapes, content = content)
+    }
 }
 
 fun fmtSize(bytes: Long): String =

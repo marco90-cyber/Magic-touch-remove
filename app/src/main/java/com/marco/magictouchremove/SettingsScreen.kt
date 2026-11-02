@@ -58,6 +58,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
@@ -131,12 +132,15 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
         ) {
             when (page) {
                 Page.MAIN -> {
-                    MenuRow(Icons.Filled.SystemUpdate, "Aggiornamenti", "App e modelli IA", hasUpdate || appUpdate) { page = Page.UPDATES }
-                    MenuRow(Icons.Filled.Memory, "Modelli IA", "Scegli, scarica ed elimina i modelli", false) { page = Page.MODELS }
-                    MenuRow(Icons.Filled.Palette, "Tema", when (ThemeSettings.mode) { 1 -> "Chiaro"; 2 -> "Scuro"; else -> "Come il sistema" }, false) { page = Page.THEME }
-                    MenuRow(Icons.Filled.Notifications, "Notifiche", "Avanzamento dei download e fine delle modifiche", false) { page = Page.NOTIFY }
-                    if (logUnlocked) MenuRow(Icons.Filled.Description, "Registro eventi", "Visualizza e salva il log per diagnosticare problemi", false) { page = Page.LOG }
-                    MenuRow(Icons.Filled.Info, "Informazioni", "Sviluppatori, versione, privacy e crediti", false) { page = Page.INFO }
+                    // gruppo nello stile di MLauncher (MLTheme): angoli da 28 dp, voci separate da un filo
+                    Column(Modifier.clip(RoundedCornerShape(28.dp)), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        MenuRow(Icons.Filled.SystemUpdate, "Aggiornamenti", "App e modelli IA", hasUpdate || appUpdate) { page = Page.UPDATES }
+                        MenuRow(Icons.Filled.Memory, "Modelli IA", "Scegli, scarica ed elimina i modelli", false) { page = Page.MODELS }
+                        MenuRow(Icons.Filled.Palette, "Tema", when (ThemeSettings.mode) { 1 -> "Chiaro"; 2 -> "Scuro"; else -> "Come il sistema" }, false) { page = Page.THEME }
+                        MenuRow(Icons.Filled.Notifications, "Notifiche", "Avanzamento dei download e fine delle modifiche", false) { page = Page.NOTIFY }
+                        if (logUnlocked) MenuRow(Icons.Filled.Description, "Registro eventi", "Visualizza e salva il log per diagnosticare problemi", false) { page = Page.LOG }
+                        MenuRow(Icons.Filled.Info, "Informazioni", "Sviluppatori, versione, privacy e crediti", false) { page = Page.INFO }
+                    }
                 }
                 Page.UPDATES -> {
         Section("Aggiornamenti dell'app")
@@ -332,6 +336,18 @@ fun SettingsScreen(model: ModelState, onClose: () -> Unit) {
                     ThemeOption(Icons.Filled.BrightnessAuto, "Come il sistema", "Segue il tema del telefono", 0)
                     ThemeOption(Icons.Filled.LightMode, "Chiaro", "Sfondo chiaro", 1)
                     ThemeOption(Icons.Filled.DarkMode, "Scuro", "Sfondo scuro, meno affaticamento alla sera", 2)
+                    Spacer(Modifier.size(8.dp))
+                    val ml = com.marco.mltheme.MLThemeSettings.get(ctx)
+                    Column(Modifier.clip(RoundedCornerShape(28.dp)), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        com.marco.mltheme.MLChoiceRow(
+                            "Colori", com.marco.mltheme.availableAccents, ml.accent,
+                            preview = { com.marco.mltheme.AccentPreview(it) },
+                        ) { ml.accent = it }
+                        com.marco.mltheme.MLChoiceRow(
+                            "Stile degli interruttori", com.marco.mltheme.SWITCH_STYLES, ml.switchStyle,
+                            preview = { com.marco.mltheme.SwitchStylePreview(it) },
+                        ) { ml.switchStyle = it }
+                    }
                 }
                 Page.NOTIFY -> {
                     var dl by remember { mutableStateOf(Notifier.downloadsOn(ctx)) }
@@ -492,30 +508,29 @@ private fun NotifyRow(title: String, subtitle: String, on: Boolean, onChange: (B
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
-            androidx.compose.material3.Switch(checked = on, onCheckedChange = onChange)
+            com.marco.mltheme.MLSwitch(checked = on, onCheckedChange = onChange)
         }
     }
 }
 
 @Composable
 private fun MenuRow(icon: ImageVector, title: String, subtitle: String, badge: Boolean, onClick: () -> Unit) {
-    Card(
-        onClick = onClick, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        modifier = Modifier.fillMaxWidth()
+    // riga di MLauncher: icona tonda, testi, freccetta
+    Row(
+        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).clickable(onClick = onClick).padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(44.dp)) {
-                Box(contentAlignment = Alignment.Center) {
-                    BadgedBox(badge = { if (badge) Badge() }) { Icon(icon, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) }
-                }
+        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(44.dp)) {
+            Box(contentAlignment = Alignment.Center) {
+                BadgedBox(badge = { if (badge) Badge() }) { Icon(icon, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) }
             }
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        com.marco.mltheme.MLChevron()
     }
 }
 
